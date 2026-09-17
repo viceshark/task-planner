@@ -1,12 +1,14 @@
+# Приложение + reverse-proxy Caddy (HTTPS с автоматическим сертификатом Let's Encrypt).
+# Настройки — в .env (см. .env.example): APP_USERNAME, APP_PASSWORD, DOMAIN.
 services:
   planner:
     build: .
     image: task-planner:latest
     container_name: task-planner
-    ports:
-      - "${PORT:-8080}:8080"
+    # Наружу порт не публикуем: единственная точка входа — Caddy
+    expose:
+      - "8080"
     environment:
-      # Логин/пароль для входа в приложение
       APP_USERNAME: ${APP_USERNAME:-admin}
       APP_PASSWORD: ${APP_PASSWORD:-admin}
       # Файл SQLite хранится в томе, чтобы данные переживали пересборку контейнера
@@ -17,5 +19,28 @@ services:
       - planner-data:/data
     restart: unless-stopped
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: task-planner-caddy
+    depends_on:
+      planner:
+        # Caddy стартует после того, как приложение ответило на healthcheck — без 502 при запуске
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # Адрес сайта для Caddyfile. Домен → автоматический HTTPS.
+      # С префиксом http:// (по умолчанию http://localhost) — обычный HTTP без сертификата, для локальной работы.
+      DOMAIN: ${DOMAIN:-http://localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
 volumes:
   planner-data:
+  caddy-data:
+  caddy-config:

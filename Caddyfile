@@ -1,4 +1,7 @@
-# Домен берётся из переменной DOMAIN (.env). Caddy сам выпускает и продлевает сертификат.
+# Адрес сайта берётся из переменной DOMAIN (.env).
+#   DOMAIN=task-planeur.vc-inc.tech  — Caddy сам выпускает и продлевает сертификат Let's Encrypt,
+#                                       http:// редиректит на https://
+#   DOMAIN=http://localhost          — обычный HTTP на порту 80, без сертификата (локальная работа)
 {$DOMAIN} {
     encode gzip zstd
     reverse_proxy planner:8080

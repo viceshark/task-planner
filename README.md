@@ -21,40 +21,83 @@
 
 ## Запуск в Docker
 
+В `docker-compose.yml` два сервиса: приложение (`planner`) и reverse-proxy **Caddy**, который
+принимает 80/443 и проксирует запросы в приложение. Наружу открыт только Caddy.
+
 ```bash
+cp .env.example .env   # логин, пароль, домен
 docker compose up -d --build
 ```
 
-Приложение: <http://localhost:8080>. Логин/пароль по умолчанию — `admin` / `admin`.
+- На сервере с доменом: `https://ваш-домен` (см. раздел [Caddy и HTTPS](#caddy-и-https)).
+- Локально (без `DOMAIN` в `.env`): <http://localhost>.
 
-Настройки через переменные окружения (см. `.env.example`, файл `.env` подхватывается compose автоматически):
+Логин/пароль по умолчанию — `admin` / `admin`. Переменные окружения (`.env` подхватывается compose автоматически):
 
 | Переменная            | По умолчанию        | Описание                                   |
 |-----------------------|---------------------|--------------------------------------------|
 | `APP_USERNAME`        | `admin`             | Логин для входа                            |
 | `APP_PASSWORD`        | `admin`             | Пароль для входа                           |
-| `APP_DB_PATH`         | `/data/planner.db`  | Путь к файлу SQLite (в Docker — том `planner-data`) |
 | `APP_SEED_EMPLOYEES`  | `true`              | Создать демо-сотрудников при пустой базе   |
-| `PORT`                | `8080`              | Порт на хосте                              |
+| `DOMAIN`              | `http://localhost`  | Адрес сайта для Caddy (домен → HTTPS)      |
 
-Данные хранятся в Docker-томе `planner-data` и переживают пересборку образа.
-
-## Продакшен: домен и HTTPS
-
-В комплекте `docker-compose.prod.yml` — приложение за reverse-proxy Caddy, который сам получает
-и продлевает сертификат Let's Encrypt.
-
-1. В DNS домена создайте A-запись для нужного имени (домена или поддомена), указывающую на IP сервера.
-2. Откройте порты 80 и 443 (`sudo ufw allow 80,443/tcp`); порт 8080 наружу больше не нужен.
-3. В `.env` добавьте `DOMAIN=ваш-домен` (плюс `APP_USERNAME` / `APP_PASSWORD`).
-4. Запустите:
+Данные: SQLite в томе `planner-data`, сертификаты Caddy в томе `caddy-data` — оба переживают
+`docker compose down` и пересборку образа. Обновление на сервере:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+git pull && docker compose up -d --build
 ```
 
-Приложение будет доступно по `https://ваш-домен`. Обычный `docker-compose.yml` остаётся для локального
-запуска на `http://localhost:8080`; одновременно оба варианта не запускайте — они делят том с базой.
+## Caddy и HTTPS
+
+Схема:
+
+```
+браузер ──HTTPS :443──▶ Caddy ──HTTP :8080──▶ planner (Spring Boot)
+        ──HTTP  :80 ──▶ Caddy ──▶ редирект на https://
+```
+
+Конфигурация — файл `Caddyfile` (монтируется в контейнер только для чтения):
+
+```
+{$DOMAIN} {
+    encode gzip zstd
+    reverse_proxy planner:8080
+}
+```
+
+- **`DOMAIN=task-planeur.vc-inc.tech`** — Caddy включает автоматический HTTPS: получает сертификат
+  Let's Encrypt по протоколу ACME (проверка http-01 через порт 80), хранит его в томе `caddy-data`
+  и сам продлевает примерно за 30 дней до истечения (срок действия — 90 дней). Ничего настраивать
+  вручную не нужно. HTTP автоматически редиректит на HTTPS, включены HTTP/2 и HTTP/3.
+- **`DOMAIN=http://localhost`** (по умолчанию) — префикс `http://` отключает TLS, Caddy отдаёт
+  приложение по обычному HTTP на порту 80. Удобно для локальной работы.
+- `reverse_proxy` передаёт в приложение заголовки `X-Forwarded-For` / `X-Forwarded-Proto`;
+  в `application.yml` включён `server.forward-headers-strategy: native`, поэтому редиректы и cookie
+  корректны за прокси.
+
+Что нужно для HTTPS на сервере:
+
+1. A-запись домена (или поддомена) в DNS → IP сервера. Проверка: `dig +short ваш-домен`.
+2. Открытые порты 80 и 443: `sudo ufw allow 80,443/tcp`. Порт 80 обязателен — по нему Let's Encrypt
+   проверяет владение доменом.
+3. `DOMAIN=ваш-домен` в `.env` и `docker compose up -d`.
+
+Диагностика:
+
+```bash
+docker compose logs --tail 50 caddy     # получение сертификата, ошибки прокси
+curl -sI https://ваш-домен/login | head -1   # ожидается HTTP/2 200
+```
+
+Опционально: чтобы Let's Encrypt присылал письма о проблемах с продлением, добавьте в начало
+`Caddyfile` глобальный блок с email:
+
+```
+{
+    email you@example.com
+}
+```
 
 ## Локальный запуск
 
