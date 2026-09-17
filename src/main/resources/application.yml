@@ -21,6 +21,8 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  # За reverse-proxy (Caddy) доверяем X-Forwarded-*: редиректы и cookie будут https
+  forward-headers-strategy: native
   error:
     whitelabel:
       enabled: true

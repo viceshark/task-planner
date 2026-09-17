@@ -1,0 +1,5 @@
+# Домен берётся из переменной DOMAIN (.env). Caddy сам выпускает и продлевает сертификат.
+{$DOMAIN}, www.{$DOMAIN} {
+    encode gzip zstd
+    reverse_proxy planner:8080
+}

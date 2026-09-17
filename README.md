@@ -39,6 +39,23 @@ docker compose up -d --build
 
 Данные хранятся в Docker-томе `planner-data` и переживают пересборку образа.
 
+## Продакшен: домен и HTTPS
+
+В комплекте `docker-compose.prod.yml` — приложение за reverse-proxy Caddy, который сам получает
+и продлевает сертификат Let's Encrypt.
+
+1. В DNS домена создайте A-записи `@` и `www`, указывающие на IP сервера.
+2. Откройте порты 80 и 443 (`sudo ufw allow 80,443/tcp`); порт 8080 наружу больше не нужен.
+3. В `.env` добавьте `DOMAIN=ваш-домен` (плюс `APP_USERNAME` / `APP_PASSWORD`).
+4. Запустите:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Приложение будет доступно по `https://ваш-домен`. Обычный `docker-compose.yml` остаётся для локального
+запуска на `http://localhost:8080`; одновременно оба варианта не запускайте — они делят том с базой.
+
 ## Локальный запуск
 
 Нужны JDK 17+ и Maven.
