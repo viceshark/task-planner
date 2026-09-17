@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org" th:attr="data-theme=${theme}">
+<head>
+    <th:block th:replace="~{fragments/layout :: pageHead('Календарь')}"></th:block>
+</head>
+<body class="page-calendar">
+<div th:replace="~{fragments/layout :: backdrop}"></div>
+<header th:replace="~{fragments/layout :: nav('calendar')}"></header>
+
+<main class="page">
+    <section class="toolbar glass">
+        <div class="tb-group">
+            <h1 class="page-title">Планировщик</h1>
+            <span class="range-label" id="rangeLabel"></span>
+        </div>
+        <div class="tb-group tb-right">
+            <span class="month-label" id="monthLabel"></span>
+            <div class="nav-days">
+                <button id="btnPrevWeek" class="btn btn-icon" type="button" title="На неделю назад">&#9664;</button>
+                <button id="btnToday" class="btn" type="button">Сегодня</button>
+                <button id="btnNextWeek" class="btn btn-icon" type="button" title="На неделю вперёд">&#9654;</button>
+            </div>
+            <label class="jira-field">
+                <span>Jira</span>
+                <input id="jiraBase" type="url" placeholder="https://jira.example.com" spellcheck="false">
+            </label>
+            <button id="btnAddEmployee" class="btn btn-primary" type="button">+ Сотрудник</button>
+        </div>
+    </section>
+
+    <section class="board glass" id="board" aria-label="Календарь задач">
+        <div class="board-inner" id="boardInner">
+            <div class="hdr-row" id="hdrRow">
+                <div class="corner">
+                    <span>Сотрудник</span>
+                    <button class="icon-btn" id="btnAddEmployeeCorner" type="button" title="Добавить сотрудника">+</button>
+                </div>
+            </div>
+        </div>
+        <div class="board-empty" id="boardEmpty" hidden>
+            Пока нет сотрудников. Нажмите «+ Сотрудник», чтобы добавить первого.
+        </div>
+    </section>
+
+    <div class="legend">
+        <span class="item"><i class="sw sw-ok"></i>занятость 8ч</span>
+        <span class="item"><i class="sw sw-under"></i>меньше 8ч</span>
+        <span class="item"><i class="sw sw-over"></i>больше 8ч</span>
+        <span class="item"><i class="sw sw-weekend"></i>выходной</span>
+        <span class="item"><i class="sw sw-today"></i>сегодня</span>
+        <span class="item hint">Задачи и сотрудников можно перетаскивать · клик по задаче — редактирование</span>
+    </div>
+</main>
+
+<!-- Диалог задачи: создание и редактирование -->
+<dialog id="taskDialog" class="modal glass">
+    <form id="taskForm" method="dialog" class="modal-form">
+        <div class="modal-head">
+            <h2 id="taskDialogTitle">Новая задача</h2>
+            <span class="modal-sub" id="taskDialogSub"></span>
+        </div>
+        <label class="field">
+            <span>Задача</span>
+            <textarea id="taskTitle" rows="3" maxlength="2000" placeholder="PROJ-123&#10;или описание задачи" required></textarea>
+            <small class="field-hint">Jira-ключи (PROJ-123) и ссылки станут кликабельными</small>
+        </label>
+        <div class="field-row">
+            <label class="field">
+                <span>Релиз</span>
+                <input id="taskRelease" type="text" maxlength="100" list="releaseList" placeholder="например, 2.14">
+                <datalist id="releaseList"></datalist>
+            </label>
+            <label class="field">
+                <span>Оценка, ч</span>
+                <input id="taskEstimate" type="number" min="0" max="24" step="0.5" placeholder="8">
+            </label>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-danger" id="taskDelete" hidden>Удалить</button>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-ghost" data-close>Отмена</button>
+            <button type="submit" class="btn btn-primary" id="taskSubmit">Сохранить</button>
+        </div>
+    </form>
+</dialog>
+
+<!-- Диалог сотрудника: создание и редактирование -->
+<dialog id="employeeDialog" class="modal glass">
+    <form id="employeeForm" method="dialog" class="modal-form">
+        <div class="modal-head">
+            <h2 id="employeeDialogTitle">Новый сотрудник</h2>
+        </div>
+        <label class="field">
+            <span>Имя</span>
+            <input id="employeeName" type="text" maxlength="100" required placeholder="Имя сотрудника">
+        </label>
+        <div class="field">
+            <span>Цвет</span>
+            <div class="palette" id="palette"></div>
+            <label class="custom-color">
+                <input id="employeeColor" type="color" value="#00e5ff">
+                <span>свой цвет</span>
+            </label>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-danger" id="employeeDelete" hidden>Удалить</button>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-ghost" data-close>Отмена</button>
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+        </div>
+    </form>
+</dialog>
+
+<!-- Подтверждение опасных действий -->
+<dialog id="confirmDialog" class="modal glass modal-sm">
+    <form method="dialog" class="modal-form">
+        <div class="modal-head"><h2 id="confirmTitle">Подтвердите</h2></div>
+        <p id="confirmText" class="confirm-text"></p>
+        <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-ghost" data-close>Отмена</button>
+            <button type="submit" class="btn btn-danger" id="confirmOk">Удалить</button>
+        </div>
+    </form>
+</dialog>
+
+<div th:replace="~{fragments/layout :: toasts}"></div>
+
+<script th:src="@{/js/common.js}"></script>
+<script th:src="@{/js/calendar.js}"></script>
+</body>
+</html>

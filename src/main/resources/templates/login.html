@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org" th:attr="data-theme=${theme}">
+<head>
+    <th:block th:replace="~{fragments/layout :: pageHead('Вход')}"></th:block>
+</head>
+<body class="page-login">
+<div th:replace="~{fragments/layout :: backdrop}"></div>
+
+<main class="login-wrap">
+    <section class="glass login-card">
+        <div class="win-title" aria-hidden="true">
+            <span class="win-btn"></span>
+            <span class="win-title-text">TaskPlanner 3.1 — Вход</span>
+            <span class="win-btn"></span>
+            <span class="win-btn"></span>
+        </div>
+        <div class="login-body">
+            <div class="login-logo">
+                <span class="brand-mark big"></span>
+            </div>
+            <h1 class="chrome-title">TASK PLANNER</h1>
+            <p class="login-sub">Планирование задач команды</p>
+
+            <div class="alert error" th:if="${param.error}">Неверный логин или пароль</div>
+            <div class="alert info" th:if="${param.logout}">Вы вышли из системы</div>
+            <div class="alert info" th:if="${param.expired}">Сессия истекла, войдите снова</div>
+
+            <form th:action="@{/login}" method="post" class="login-form" autocomplete="on">
+                <label class="field">
+                    <span>Логин</span>
+                    <input type="text" name="username" required autofocus autocomplete="username">
+                </label>
+                <label class="field">
+                    <span>Пароль</span>
+                    <input type="password" name="password" required autocomplete="current-password">
+                </label>
+                <button type="submit" class="btn btn-primary btn-block">Войти</button>
+            </form>
+
+            <div class="login-theme">
+                <span class="login-theme-label">Тема</span>
+                <div th:replace="~{fragments/layout :: themeSwitch}"></div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<script th:src="@{/js/common.js}"></script>
+</body>
+</html>

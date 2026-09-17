@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity6">
+<head>
+    <!-- Общая часть <head>: мета-теги, шрифты, стили, CSRF-токены для fetch-запросов -->
+    <th:block th:fragment="pageHead(title)">
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title th:text="${title} + ' — Task Planner'">Task Planner</title>
+        <meta name="_csrf" th:content="${_csrf != null ? _csrf.token : ''}">
+        <meta name="_csrf_header" th:content="${_csrf != null ? _csrf.headerName : 'X-CSRF-TOKEN'}">
+        <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23ffd166'/%3E%3Cstop offset='1' stop-color='%23ff2fd6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%23120a2e'/%3E%3Ccircle cx='32' cy='30' r='18' fill='url(%23g)'/%3E%3Crect x='6' y='36' width='52' height='3' fill='%23120a2e'/%3E%3Crect x='6' y='43' width='52' height='4' fill='%23120a2e'/%3E%3Cpath d='M4 60 L60 60 M8 52 L56 52 M14 46 L50 46' stroke='%2300e5ff' stroke-width='2'/%3E%3C/svg%3E">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+        <link rel="stylesheet" th:href="@{/css/app.css}">
+        <link rel="stylesheet" th:href="@{/css/theme-90s.css}">
+    </th:block>
+</head>
+<body>
+    <!-- Фон в стиле retrowave: небо, солнце, сетка-горизонт (в теме 90s скрыт) -->
+    <div th:fragment="backdrop" class="backdrop" aria-hidden="true">
+        <div class="bd-stars"></div>
+        <div class="bd-sun"></div>
+        <div class="bd-grid"></div>
+        <div class="bd-glow"></div>
+    </div>
+
+    <!-- Переключатель темы: RetroWave / 90s. Состояние берётся из атрибута data-theme на <html> -->
+    <div th:fragment="themeSwitch" class="theme-switch" role="group" aria-label="Тема оформления">
+        <button type="button" class="theme-btn" data-theme-choice="retrowave" title="Тема RetroWave">RetroWave</button>
+        <button type="button" class="theme-btn" data-theme-choice="90s" title="Тема 90s">90s</button>
+    </div>
+
+    <!-- Верхнее меню: заголовок окна (для 90s), переходы между страницами, тема и выход -->
+    <header th:fragment="nav(active)" class="topbar glass">
+        <div class="win-title" aria-hidden="true">
+            <span class="win-btn"></span>
+            <span class="win-title-text" th:text="'TaskPlanner 3.1 — ' + (${active == 'analytics'} ? 'Аналитика' : 'Планировщик')">TaskPlanner 3.1</span>
+            <span class="win-btn"></span>
+            <span class="win-btn"></span>
+        </div>
+        <div class="menu-row">
+            <a class="brand" th:href="@{/}">
+                <span class="brand-mark"></span>
+                <span class="brand-text">Task<b>Planner</b></span>
+            </a>
+            <nav class="menu">
+                <a th:href="@{/}" th:classappend="${active == 'calendar'} ? 'active'">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+                    Календарь
+                </a>
+                <a th:href="@{/analytics}" th:classappend="${active == 'analytics'} ? 'active'">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+                    Аналитика
+                </a>
+            </nav>
+            <div class="user">
+                <div th:replace="~{fragments/layout :: themeSwitch}"></div>
+                <span class="user-name" sec:authentication="name">user</span>
+                <form th:action="@{/logout}" method="post">
+                    <button type="submit" class="btn btn-ghost" title="Выйти">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17l5-5-5-5M15 12H3M21 4v16"/></svg>
+                        Выйти
+                    </button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <!-- Всплывающие уведомления -->
+    <div th:fragment="toasts" id="toasts" class="toasts" aria-live="polite"></div>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org" th:attr="data-theme=${theme}">
+<head>
+    <th:block th:replace="~{fragments/layout :: pageHead('Аналитика')}"></th:block>
+</head>
+<body class="page-analytics">
+<div th:replace="~{fragments/layout :: backdrop}"></div>
+<header th:replace="~{fragments/layout :: nav('analytics')}"></header>
+
+<main class="page">
+    <section class="toolbar glass">
+        <div class="tb-group">
+            <h1 class="page-title">Аналитика</h1>
+            <span class="range-label" id="rangeLabel"></span>
+        </div>
+        <div class="tb-group tb-right">
+            <div class="seg" id="presets">
+                <button type="button" class="seg-btn" data-preset="week">Неделя</button>
+                <button type="button" class="seg-btn active" data-preset="month">Месяц</button>
+                <button type="button" class="seg-btn" data-preset="quarter">Квартал</button>
+                <button type="button" class="seg-btn" data-preset="30">30 дней</button>
+            </div>
+            <label class="date-field"><span>с</span><input type="date" id="from"></label>
+            <label class="date-field"><span>по</span><input type="date" id="to"></label>
+            <button type="button" class="btn btn-primary" id="btnApply">Показать</button>
+        </div>
+    </section>
+
+    <section class="kpis" id="kpis">
+        <div class="glass kpi"><span class="kpi-label">Часов запланировано</span><b class="kpi-value" id="kpiHours">—</b><span class="kpi-sub" id="kpiCapacity"></span></div>
+        <div class="glass kpi"><span class="kpi-label">Загрузка команды</span><b class="kpi-value" id="kpiUtil">—</b><span class="kpi-sub">от нормы 8ч в рабочий день</span></div>
+        <div class="glass kpi"><span class="kpi-label">Задач</span><b class="kpi-value" id="kpiTasks">—</b><span class="kpi-sub" id="kpiTasksSub"></span></div>
+        <div class="glass kpi"><span class="kpi-label">Релизов</span><b class="kpi-value" id="kpiReleases">—</b><span class="kpi-sub" id="kpiAvg"></span></div>
+    </section>
+
+    <section class="charts">
+        <div class="glass card card-wide">
+            <div class="card-head"><h2>Загрузка по дням</h2><span class="card-sub">часы по сотрудникам, пунктирная линия — норма 8ч на человека</span></div>
+            <div class="chart-box tall"><canvas id="chartDaily"></canvas></div>
+        </div>
+        <div class="glass card">
+            <div class="card-head"><h2>Часы по сотрудникам</h2><span class="card-sub">план vs ёмкость периода</span></div>
+            <div class="chart-box"><canvas id="chartEmployees"></canvas></div>
+        </div>
+        <div class="glass card">
+            <div class="card-head"><h2>Утилизация</h2><span class="card-sub">% от ёмкости за период</span></div>
+            <div class="chart-box"><canvas id="chartUtil"></canvas></div>
+        </div>
+        <div class="glass card">
+            <div class="card-head"><h2>Релизы</h2><span class="card-sub">распределение часов</span></div>
+            <div class="chart-box"><canvas id="chartReleases"></canvas></div>
+        </div>
+        <div class="glass card">
+            <div class="card-head"><h2>Дни недели</h2><span class="card-sub">средняя нагрузка команды</span></div>
+            <div class="chart-box"><canvas id="chartWeekdays"></canvas></div>
+        </div>
+        <div class="glass card">
+            <div class="card-head"><h2>Топ задач</h2><span class="card-sub">по суммарной оценке</span></div>
+            <div class="chart-box"><canvas id="chartTop"></canvas></div>
+        </div>
+        <div class="glass card card-wide">
+            <div class="card-head"><h2>Сводка по сотрудникам</h2></div>
+            <div class="table-wrap">
+                <table class="table" id="employeeTable">
+                    <thead>
+                    <tr>
+                        <th>Сотрудник</th>
+                        <th class="num">Часы</th>
+                        <th class="num">Ёмкость</th>
+                        <th class="num">Загрузка</th>
+                        <th class="num">Задач</th>
+                        <th class="num">Перегруз (дней)</th>
+                        <th class="num">Пустых раб. дней</th>
+                        <th class="num">Макс. за день</th>
+                    </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</main>
+
+<div th:replace="~{fragments/layout :: toasts}"></div>
+
+<script th:src="@{/webjars/chart.js/4.4.1/dist/chart.umd.js}"></script>
+<script th:src="@{/js/common.js}"></script>
+<script th:src="@{/js/analytics.js}"></script>
+</body>
+</html>

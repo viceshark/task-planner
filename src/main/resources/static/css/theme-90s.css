@@ -1,0 +1,725 @@
+/* =====================================================================
+   Тема «90s»: окно в духе классических десктопов — бежевые панели,
+   чёрные рамки, жёсткие тени, пиксельный логотип, моноширинные подписи.
+   Все правила действуют только при <html data-theme="90s">.
+   ===================================================================== */
+
+/* Шрифты макета вшиты в проект, чтобы тема работала без интернета */
+@font-face { font-family: 'Silkscreen'; font-style: normal; font-weight: 400; font-display: swap; src: url('../fonts/silkscreen-400.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Silkscreen'; font-style: normal; font-weight: 400; font-display: swap; src: url('../fonts/silkscreen-400-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Silkscreen'; font-style: normal; font-weight: 700; font-display: swap; src: url('../fonts/silkscreen-700.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Silkscreen'; font-style: normal; font-weight: 700; font-display: swap; src: url('../fonts/silkscreen-700-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('../fonts/space-mono-400.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('../fonts/space-mono-400-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('../fonts/space-mono-700.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('../fonts/space-mono-700-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
+html[data-theme="90s"] {
+  --bg: #8d8b80;
+  --bg2: #96948a;
+  --panel: #d9d5c8;
+  --panel-dark: #c5c1b4;
+  --panel-light: #e7e3d6;
+  --ink: #000;
+  --ink2: #3a3a35;
+  --grid-line: #b5b1a4;
+  --purple90: #7a0f6e;
+  --link: #00008b;
+  --ok90: #8fd08f;
+  --under90: #e8d27a;
+  --over90: #e08f8f;
+  --hatch: repeating-linear-gradient(45deg, #e3e0d4 0 3px, #d0ccbf 3px 6px);
+  --stripes: repeating-linear-gradient(180deg, #000 0 1px, #d9d5c8 1px 3px);
+  --bevel: inset 1px 1px 0 #fff, inset -1px -1px 0 #8d8b80;
+  --bevel-in: inset 1px 1px 0 #8d8b80, inset -1px -1px 0 #fff;
+  --hard: 3px 3px 0 rgba(0, 0, 0, 0.45);
+
+  /* переопределяем базовые токены, чтобы всё, что на них завязано, стало «плоским» */
+  --text: #000;
+  --muted: #3a3a35;
+  --line: #b5b1a4;
+  --solid: #d9d5c8;
+  --font-display: 'Silkscreen', 'Courier New', monospace;
+  --font-body: Verdana, Geneva, 'DejaVu Sans', sans-serif;
+  --font-mono: 'Space Mono', 'Courier New', monospace;
+  --topbar-h: 56px;
+
+  color-scheme: light;
+}
+
+html[data-theme="90s"] body {
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 12px;
+  background-color: var(--bg);
+  background-image: repeating-conic-gradient(var(--bg) 0 25%, var(--bg2) 0 50%);
+  background-size: 4px 4px;
+  -webkit-font-smoothing: auto;
+}
+
+html[data-theme="90s"] body:not(.page-login) { padding-top: 14px; }
+
+html[data-theme="90s"] a { color: var(--link); text-decoration: underline; }
+html[data-theme="90s"] a:hover { color: #0000ff; }
+
+html[data-theme="90s"] .backdrop { display: none; }
+
+html[data-theme="90s"] :focus-visible { outline: 1px dotted #000; outline-offset: 1px; }
+
+/* ---------- Скроллбары ---------- */
+
+html[data-theme="90s"] * { scrollbar-width: auto; scrollbar-color: #d9d5c8 #fff; }
+html[data-theme="90s"] *::-webkit-scrollbar { width: 15px; height: 15px; }
+html[data-theme="90s"] *::-webkit-scrollbar-track { background: #fff; border-radius: 0; box-shadow: inset 1px 1px 0 #000, inset -1px -1px 0 #000; }
+html[data-theme="90s"] *::-webkit-scrollbar-thumb { background: var(--panel); border: 1px solid #000; border-radius: 0; box-shadow: var(--bevel); }
+html[data-theme="90s"] *::-webkit-scrollbar-thumb:hover { background: var(--panel-light); }
+
+/* ---------- «Стекло» становится панелью ---------- */
+
+html[data-theme="90s"] .glass {
+  background: var(--panel);
+  border: 1px solid #000;
+  border-radius: 0;
+  box-shadow: var(--hard);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme="90s"] .glass::before,
+html[data-theme="90s"] .glass:not(.board)::before { content: none; }
+
+/* ---------- Заголовок окна и меню ---------- */
+
+html[data-theme="90s"] .win-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 20px;
+  padding: 0 6px;
+  border-bottom: 1px solid #000;
+  background: var(--stripes);
+}
+
+html[data-theme="90s"] .win-btn {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border: 1px solid #000;
+  background: var(--panel);
+  box-shadow: var(--bevel);
+}
+
+/* текст заголовка — на бежевой подложке поверх полос, по центру между кнопками */
+html[data-theme="90s"] .win-title-text {
+  flex: none;
+  margin: 0 auto;
+  padding: 1px 10px;
+  background: var(--panel);
+  font: 700 11px/1.4 Verdana, Geneva, sans-serif;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+html[data-theme="90s"] .topbar {
+  top: 0;
+  margin: 0 14px;
+  border-bottom: 1px solid #000;
+  box-shadow: 3px 0 0 rgba(0, 0, 0, 0.45);
+}
+
+html[data-theme="90s"] .menu-row {
+  height: 36px;
+  padding: 0 10px;
+  gap: 14px;
+  background: #fff;
+}
+
+html[data-theme="90s"] .brand-mark { display: none; }
+
+html[data-theme="90s"] .brand-text {
+  font: 400 13px/1 'Silkscreen', monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #000;
+  text-shadow: none;
+}
+
+html[data-theme="90s"] .brand-text b { color: var(--purple90); text-shadow: none; font-weight: 400; }
+
+html[data-theme="90s"] .menu { gap: 6px; margin-left: 6px; }
+
+html[data-theme="90s"] .menu a svg { display: none; }
+
+html[data-theme="90s"] .menu a {
+  padding: 4px 14px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: var(--panel-dark);
+  color: var(--ink2);
+  font: 400 11px/1.3 Verdana, Geneva, sans-serif;
+  transition: none;
+}
+
+html[data-theme="90s"] .menu a:hover { background: var(--panel); color: #000; }
+
+html[data-theme="90s"] .menu a.active {
+  background: #fff;
+  color: #000;
+  font-weight: 700;
+  box-shadow: none;
+  border-color: #000;
+}
+
+html[data-theme="90s"] .user { gap: 10px; }
+
+html[data-theme="90s"] .user-name {
+  font: 400 10px/1 'Space Mono', monospace;
+  color: #000;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+/* ---------- Переключатель темы ---------- */
+
+html[data-theme="90s"] .theme-switch { padding: 0; border: none; background: none; border-radius: 0; gap: 0; }
+
+html[data-theme="90s"] .theme-btn {
+  padding: 3px 9px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: var(--panel);
+  box-shadow: var(--bevel);
+  color: #000;
+  font: 700 10px/1.4 Verdana, Geneva, sans-serif;
+  letter-spacing: 0;
+  transition: none;
+}
+
+html[data-theme="90s"] .theme-btn + .theme-btn { border-left: none; }
+html[data-theme="90s"] .theme-btn:hover { background: var(--panel-light); }
+
+html[data-theme="90s"] .theme-btn.active {
+  background: #fff;
+  box-shadow: var(--bevel-in);
+  text-decoration: underline;
+}
+
+/* ---------- Кнопки и поля ---------- */
+
+html[data-theme="90s"] .btn {
+  padding: 5px 12px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: var(--panel);
+  color: #000;
+  box-shadow: var(--bevel);
+  font: 700 10.5px/1.4 Verdana, Geneva, sans-serif;
+  text-shadow: none;
+  transition: none;
+}
+
+html[data-theme="90s"] .btn:hover { background: var(--panel-light); border-color: #000; box-shadow: var(--bevel); filter: none; }
+html[data-theme="90s"] .btn:active { transform: none; box-shadow: var(--bevel-in); }
+
+html[data-theme="90s"] .btn-primary { border-width: 2px; background: var(--panel); color: #000; }
+html[data-theme="90s"] .btn-danger { background: #f3e2e2; color: #000; }
+html[data-theme="90s"] .btn-danger:hover { background: #f8ecec; }
+html[data-theme="90s"] .btn-ghost { background: var(--panel); box-shadow: var(--bevel); }
+html[data-theme="90s"] .btn-block { padding: 7px; font-size: 11px; }
+html[data-theme="90s"] .btn-icon { padding: 5px 9px; font-size: 10px; }
+html[data-theme="90s"] .btn svg { display: none; }
+
+html[data-theme="90s"] .icon-btn {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: #fff;
+  color: #000;
+  font: 700 11px/1 Verdana, Geneva, sans-serif;
+  transition: none;
+}
+
+html[data-theme="90s"] .icon-btn:hover { background: #000; color: #fff; box-shadow: none; }
+
+html[data-theme="90s"] input,
+html[data-theme="90s"] textarea,
+html[data-theme="90s"] select {
+  padding: 4px 8px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: #fff;
+  color: #000;
+  box-shadow: inset 1px 1px 0 #8d8b80;
+  font: 400 10.5px/1.5 'Space Mono', 'Courier New', monospace;
+}
+
+html[data-theme="90s"] input::placeholder,
+html[data-theme="90s"] textarea::placeholder { color: #8d8b80; }
+
+html[data-theme="90s"] input:focus-visible,
+html[data-theme="90s"] textarea:focus-visible,
+html[data-theme="90s"] select:focus-visible {
+  border-color: #000;
+  outline: 1px dotted #000;
+  outline-offset: 1px;
+  box-shadow: inset 1px 1px 0 #8d8b80;
+}
+
+html[data-theme="90s"] textarea { font-size: 11px; }
+
+html[data-theme="90s"] .field > span,
+html[data-theme="90s"] .jira-field,
+html[data-theme="90s"] .login-theme-label,
+html[data-theme="90s"] .date-field {
+  font: 700 10px/1.4 Verdana, Geneva, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #000;
+}
+
+html[data-theme="90s"] .field-hint { font: 400 9.5px/1.4 Verdana, Geneva, sans-serif; color: var(--ink2); }
+html[data-theme="90s"] .jira-field input { width: 210px; font-size: 10px; }
+
+/* ---------- Страница как тело окна ---------- */
+
+html[data-theme="90s"] .page {
+  margin: 0 14px;
+  padding: 10px;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid #000;
+  border-top: none;
+  box-shadow: var(--hard);
+}
+
+html[data-theme="90s"] .page-calendar .page { height: calc(100vh - var(--topbar-h) - 14px); }
+
+html[data-theme="90s"] .toolbar {
+  padding: 2px 0 10px;
+  border: none;
+  border-bottom: 1px solid #000;
+  background: transparent;
+  box-shadow: none;
+  align-items: flex-end;
+}
+
+html[data-theme="90s"] .page-title {
+  font: 700 15px/1.2 Verdana, Geneva, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: #000;
+  text-shadow: none;
+}
+
+html[data-theme="90s"] .range-label { font: 400 10px/1.3 'Space Mono', monospace; color: var(--ink2); }
+
+html[data-theme="90s"] .month-label {
+  padding: 4px 10px;
+  border: 1px solid #000;
+  background: #fff;
+  font: 700 10px/1.4 'Space Mono', monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #000;
+  text-shadow: none;
+}
+
+/* ---------- Доска ---------- */
+
+html[data-theme="90s"] .board {
+  background: #fff;
+  border: 1px solid #000;
+  border-radius: 0;
+  box-shadow: inset 1px 1px 0 #8d8b80;
+}
+
+html[data-theme="90s"] .corner,
+html[data-theme="90s"] .emp-cell,
+html[data-theme="90s"] .day-head {
+  background: var(--panel);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme="90s"] .corner {
+  padding: 0 10px;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+  font: 700 9.5px/1.4 Verdana, Geneva, sans-serif;
+  letter-spacing: 0.14em;
+  color: #000;
+}
+
+html[data-theme="90s"] .day-head {
+  padding: 6px 4px;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+  transition: none;
+}
+
+html[data-theme="90s"] .dh-date { font: 700 12px/1.2 'Space Mono', monospace; }
+html[data-theme="90s"] .dh-dow { margin-top: 2px; font: 400 9px/1 Verdana, Geneva, sans-serif; letter-spacing: 0.1em; opacity: 1; }
+
+html[data-theme="90s"] .day-head.weekend { background: var(--hatch); color: var(--ink2); }
+
+html[data-theme="90s"] .day-head.today {
+  background: #000;
+  color: #fff;
+  text-shadow: none;
+  box-shadow: none;
+}
+
+html[data-theme="90s"] .dh-month {
+  left: 3px;
+  top: 0;
+  font: 700 7.5px/1.4 Verdana, Geneva, sans-serif;
+  letter-spacing: 0.08em;
+  color: var(--purple90);
+  text-shadow: none;
+}
+
+html[data-theme="90s"] .day-head.today .dh-month { color: #fff; }
+
+html[data-theme="90s"] .emp-cell {
+  padding: 12px 10px;
+  gap: 8px;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+  font: 700 12px/1.2 Verdana, Geneva, sans-serif;
+  transition: none;
+}
+
+html[data-theme="90s"] .emp-cell:hover { background: var(--panel-light); }
+
+html[data-theme="90s"] .grip {
+  width: auto;
+  height: auto;
+  background: none;
+  opacity: 1;
+  font: 400 10px/1 'Space Mono', monospace;
+  color: var(--ink2);
+}
+
+html[data-theme="90s"] .grip::before { content: '⣿'; }
+
+html[data-theme="90s"] .emp-cell .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 0;
+  border: 1px solid #000;
+  background: color-mix(in srgb, var(--emp-color, #a8d8e0) 45%, #fff);
+  box-shadow: none;
+}
+
+html[data-theme="90s"] .emp-total { font: 400 9.5px/1 'Space Mono', monospace; color: var(--ink2); }
+
+html[data-theme="90s"] .emp-row.drop-before::before,
+html[data-theme="90s"] .emp-row.drop-after::after { background: #000; box-shadow: none; }
+
+html[data-theme="90s"] .day-cell {
+  min-height: 140px;
+  border-right: 1px solid var(--grid-line);
+  border-bottom: 1px solid #000;
+  transition: none;
+}
+
+html[data-theme="90s"] .day-cell.weekend { background: var(--hatch); }
+html[data-theme="90s"] .day-cell.today { background: #fff; box-shadow: inset 2px 0 0 #000, inset -2px 0 0 #000; }
+html[data-theme="90s"] .day-cell.weekend.today { background: var(--hatch); }
+
+html[data-theme="90s"] .day-cell.drop-target {
+  background: #fff8c4;
+  box-shadow: inset 0 0 0 2px #000;
+}
+
+html[data-theme="90s"] .tasks { padding: 0 0 2px; }
+html[data-theme="90s"] .cell-foot { padding: 4px 6px 7px; }
+
+html[data-theme="90s"] .add-btn {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: #fff;
+  color: #000;
+  font: 700 12px/1 Verdana, Geneva, sans-serif;
+  transition: none;
+}
+
+html[data-theme="90s"] .add-btn:hover { background: #000; color: #fff; box-shadow: none; }
+
+/* Сумма за день: рамка + цветной квадратик */
+html[data-theme="90s"] .sum {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: var(--panel-light);
+  color: #000;
+  font: 700 9.5px/1.5 'Space Mono', monospace;
+  text-shadow: none;
+}
+
+html[data-theme="90s"] .sum::before { content: ''; width: 7px; height: 7px; border: 1px solid #000; background: var(--ok90); }
+html[data-theme="90s"] .sum.ok { background: var(--panel-light); }
+html[data-theme="90s"] .sum.under { background: #f3efdc; }
+html[data-theme="90s"] .sum.under::before { background: var(--under90); }
+html[data-theme="90s"] .sum.over { background: #f3e2e2; }
+html[data-theme="90s"] .sum.over::before { background: var(--over90); }
+
+/* Карточка задачи: белая, с цветной шапкой сотрудника */
+html[data-theme="90s"] .task {
+  margin: 6px 6px 0;
+  padding: 0;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+  font: 400 10.5px/1.35 'Space Mono', 'Courier New', monospace;
+  transition: none;
+}
+
+html[data-theme="90s"] .task::before { display: none; }
+html[data-theme="90s"] .task:hover { transform: none; box-shadow: 2px 2px 0 #000; }
+html[data-theme="90s"] .task.dragging { opacity: 0.4; transform: none; }
+
+html[data-theme="90s"] .task-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px;
+  border-bottom: 1px solid #000;
+  background: color-mix(in srgb, var(--emp-color, #a8d8e0) 45%, #fff);
+}
+
+html[data-theme="90s"] .task-sq { width: 7px; height: 7px; flex: none; border: 1px solid #000; background: #fff; }
+html[data-theme="90s"] .task-short { flex: 1; min-width: 0; font: 700 9px/1.4 'Space Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-theme="90s"] .task-hours { font: 700 9px/1.4 'Space Mono', monospace; }
+
+html[data-theme="90s"] .task-body { display: flex; flex-direction: column; gap: 5px; padding: 7px 8px; }
+html[data-theme="90s"] .task-title { word-break: break-word; }
+html[data-theme="90s"] .task a { color: var(--link); text-decoration: underline; border: none; }
+html[data-theme="90s"] .task a:hover { color: #0000ff; text-shadow: none; }
+
+html[data-theme="90s"] .task-meta { margin-top: 0; gap: 5px; }
+html[data-theme="90s"] .task-meta .est { display: none; }
+
+html[data-theme="90s"] .badge.rel {
+  padding: 1px 7px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: var(--panel);
+  color: #000;
+  font: 700 9px/1.5 'Space Mono', monospace;
+  text-shadow: none;
+}
+
+html[data-theme="90s"] .badge.rel::before { content: 'v'; }
+
+html[data-theme="90s"] .board-empty { font: 400 11px/1.5 Verdana, Geneva, sans-serif; color: var(--ink2); }
+
+/* Легенда */
+html[data-theme="90s"] .legend { padding: 0; gap: 16px; font: 400 10px/1.4 Verdana, Geneva, sans-serif; color: #000; }
+html[data-theme="90s"] .legend .hint { font-size: 9.5px; color: var(--ink2); }
+html[data-theme="90s"] .sw { width: 8px; height: 8px; border-radius: 0; border: 1px solid #000; box-shadow: none; }
+html[data-theme="90s"] .sw-ok { background: var(--ok90); }
+html[data-theme="90s"] .sw-under { background: var(--under90); }
+html[data-theme="90s"] .sw-over { background: var(--over90); }
+html[data-theme="90s"] .sw-weekend { background: repeating-linear-gradient(45deg, #8d8b80 0 2px, #d9d5c8 2px 4px); }
+html[data-theme="90s"] .sw-today { background: transparent; border: 2px solid #000; }
+
+/* ---------- Диалоги ---------- */
+
+html[data-theme="90s"] dialog.modal {
+  border: 1px solid #000;
+  border-radius: 0;
+  background: var(--panel);
+  color: #000;
+  box-shadow: var(--hard);
+}
+
+html[data-theme="90s"] dialog.modal::backdrop { background: rgba(0, 0, 0, 0.25); backdrop-filter: none; -webkit-backdrop-filter: none; }
+html[data-theme="90s"] dialog.modal[open] { animation: none; }
+
+html[data-theme="90s"] .modal-form { padding: 0 16px 14px; gap: 12px; }
+
+/* полосатый заголовок окна диалога */
+html[data-theme="90s"] .modal-form::before {
+  content: '';
+  display: block;
+  height: 14px;
+  margin: 0 -16px 2px;
+  border-bottom: 1px solid #000;
+  background: var(--stripes);
+}
+
+html[data-theme="90s"] .modal-head h2 {
+  font: 700 12px/1.3 Verdana, Geneva, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: #000;
+  text-shadow: none;
+}
+
+html[data-theme="90s"] .modal-sub,
+html[data-theme="90s"] .confirm-text { font: 400 10.5px/1.5 Verdana, Geneva, sans-serif; color: var(--ink2); }
+
+html[data-theme="90s"] .swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 0;
+  border: 1px solid #000;
+  background: color-mix(in srgb, var(--c) 45%, #fff);
+  box-shadow: none;
+  transition: none;
+}
+
+html[data-theme="90s"] .swatch:hover { transform: none; }
+html[data-theme="90s"] .swatch.active { transform: none; border: 2px solid #000; outline: 1px solid #000; outline-offset: 1px; }
+
+html[data-theme="90s"] .custom-color { font: 400 10px/1.4 Verdana, Geneva, sans-serif; color: #000; }
+html[data-theme="90s"] .custom-color input[type="color"] { border-radius: 0; padding: 1px; }
+
+/* ---------- Уведомления ---------- */
+
+html[data-theme="90s"] .toast {
+  padding: 8px 12px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: var(--panel);
+  color: #000;
+  font: 400 11px/1.4 Verdana, Geneva, sans-serif;
+  box-shadow: var(--hard);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme="90s"] .toast.error { border-color: #000; background: #f3e2e2; box-shadow: var(--hard); }
+html[data-theme="90s"] .toast.ok { border-color: #000; background: #e4f1e4; box-shadow: var(--hard); }
+
+/* ---------- Вход ---------- */
+
+html[data-theme="90s"] .login-card { padding: 0; border-radius: 0; }
+html[data-theme="90s"] .login-body { padding: 24px 28px 22px; }
+html[data-theme="90s"] .login-card .brand-mark { display: none; }
+html[data-theme="90s"] .login-logo { margin-bottom: 0; }
+
+html[data-theme="90s"] .chrome-title {
+  font: 400 22px/1.2 'Silkscreen', monospace;
+  letter-spacing: 0.04em;
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  color: #000;
+  -webkit-text-fill-color: #000;
+  filter: none;
+}
+
+html[data-theme="90s"] .login-sub { margin: 6px 0 18px; font: 400 10px/1.4 Verdana, Geneva, sans-serif; color: var(--ink2); }
+html[data-theme="90s"] .login-form { gap: 10px; }
+
+html[data-theme="90s"] .alert {
+  border: 1px solid #000;
+  border-radius: 0;
+  font: 400 10.5px/1.4 Verdana, Geneva, sans-serif;
+  color: #000;
+}
+
+html[data-theme="90s"] .alert.error { background: #f3e2e2; }
+html[data-theme="90s"] .alert.info { background: #fff; }
+
+html[data-theme="90s"] .login-theme { margin-top: 18px; padding-top: 12px; border-top: 1px solid #000; }
+
+/* ---------- Аналитика ---------- */
+
+html[data-theme="90s"] .seg { padding: 0; border: none; border-radius: 0; background: none; }
+
+html[data-theme="90s"] .seg-btn {
+  padding: 4px 11px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: var(--panel);
+  box-shadow: var(--bevel);
+  color: #000;
+  font: 700 10px/1.4 Verdana, Geneva, sans-serif;
+  transition: none;
+}
+
+html[data-theme="90s"] .seg-btn + .seg-btn { border-left: none; }
+html[data-theme="90s"] .seg-btn:hover { background: var(--panel-light); }
+html[data-theme="90s"] .seg-btn.active { background: #fff; box-shadow: var(--bevel-in); text-decoration: underline; }
+
+html[data-theme="90s"] .date-field input { padding: 3px 6px; font-size: 10px; }
+
+html[data-theme="90s"] .kpi {
+  padding: 12px 14px 10px;
+  background: #fff;
+  border: 1px solid #000;
+  box-shadow: inset 1px 1px 0 #8d8b80;
+}
+
+html[data-theme="90s"] .kpi-label { font: 700 9.5px/1.4 Verdana, Geneva, sans-serif; letter-spacing: 0.12em; color: #000; }
+
+html[data-theme="90s"] .kpi-value {
+  font: 700 26px/1.2 'Space Mono', monospace;
+  color: #000;
+  text-shadow: none;
+}
+
+html[data-theme="90s"] .kpi-value.ok,
+html[data-theme="90s"] .kpi-value.under,
+html[data-theme="90s"] .kpi-value.over {
+  align-self: flex-start;
+  padding: 0 8px;
+  border: 1px solid #000;
+  color: #000;
+  text-shadow: none;
+}
+
+html[data-theme="90s"] .kpi-value.ok { background: var(--ok90); }
+html[data-theme="90s"] .kpi-value.under { background: var(--under90); }
+html[data-theme="90s"] .kpi-value.over { background: var(--over90); }
+
+html[data-theme="90s"] .kpi-sub { font: 400 10px/1.4 Verdana, Geneva, sans-serif; color: var(--ink2); }
+
+html[data-theme="90s"] .card {
+  padding: 12px 14px 14px;
+  background: #fff;
+  border: 1px solid #000;
+  box-shadow: inset 1px 1px 0 #8d8b80;
+}
+
+html[data-theme="90s"] .card-head { margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #000; }
+
+html[data-theme="90s"] .card-head h2 {
+  font: 700 12px/1.3 Verdana, Geneva, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: #000;
+  text-shadow: none;
+}
+
+html[data-theme="90s"] .card-sub { font: 400 10px/1.4 Verdana, Geneva, sans-serif; color: var(--ink2); }
+html[data-theme="90s"] .empty-note { font: 400 11px/1.4 Verdana, Geneva, sans-serif; color: var(--ink2); }
+
+html[data-theme="90s"] .table { border: 1px solid #000; font: 400 11px/1.4 Verdana, Geneva, sans-serif; }
+html[data-theme="90s"] .table th { padding: 6px 8px; background: var(--panel); border-bottom: 1px solid #000; border-right: 1px solid var(--grid-line); font: 700 9.5px/1.4 Verdana, Geneva, sans-serif; letter-spacing: 0.1em; color: #000; }
+html[data-theme="90s"] .table td { padding: 7px 8px; border-bottom: 1px solid var(--grid-line); border-right: 1px solid var(--grid-line); }
+html[data-theme="90s"] .table th:last-child, html[data-theme="90s"] .table td:last-child { border-right: none; }
+html[data-theme="90s"] .table tr:hover td { background: #fffbe6; }
+html[data-theme="90s"] .table .num { font: 400 10.5px/1.4 'Space Mono', monospace; }
+html[data-theme="90s"] .table .dot { width: 9px; height: 9px; border-radius: 0; border: 1px solid #000; box-shadow: none !important; }
+
+html[data-theme="90s"] .pill { padding: 1px 7px; border-radius: 0; border: 1px solid #000; color: #000; font: 700 10px/1.5 'Space Mono', monospace; }
+html[data-theme="90s"] .pill.ok { background: var(--ok90); }
+html[data-theme="90s"] .pill.under { background: var(--under90); }
+html[data-theme="90s"] .pill.over { background: var(--over90); }
+
+@media (max-width: 900px) {
+  html[data-theme="90s"] .topbar { margin: 0 8px; }
+  html[data-theme="90s"] .page { margin: 0 8px; }
+}
