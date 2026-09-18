@@ -18,6 +18,13 @@ class WorkDaysTest {
     }
 
     @Test
+    void nextWorkdaySkipsWeekend() {
+        assertThat(WorkDays.nextWorkday(LocalDate.of(2026, 9, 18))).isEqualTo(LocalDate.of(2026, 9, 21)); // Пт → Пн
+        assertThat(WorkDays.nextWorkday(LocalDate.of(2026, 9, 19))).isEqualTo(LocalDate.of(2026, 9, 21)); // Сб → Пн
+        assertThat(WorkDays.nextWorkday(LocalDate.of(2026, 9, 21))).isEqualTo(LocalDate.of(2026, 9, 22)); // Пн → Вт
+    }
+
+    @Test
     void singleDayTaskOccupiesOnlyItsDayEvenOnWeekend() {
         assertThat(WorkDays.taskDays(LocalDate.of(2026, 9, 19), 1)).containsExactly(LocalDate.of(2026, 9, 19));
         assertThat(WorkDays.taskDays(LocalDate.of(2026, 9, 19), 0)).hasSize(1);

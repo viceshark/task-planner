@@ -46,6 +46,15 @@ public final class WorkDays {
         return taskDays(t.getDay(), t.getDays());
     }
 
+    /** Следующий рабочий день после указанного. */
+    public static LocalDate nextWorkday(LocalDate d) {
+        LocalDate cur = d.plusDays(1);
+        while (!isWorkday(cur)) {
+            cur = cur.plusDays(1);
+        }
+        return cur;
+    }
+
     public static LocalDate lastDay(Task t) {
         List<LocalDate> days = taskDays(t);
         return days.get(days.size() - 1);

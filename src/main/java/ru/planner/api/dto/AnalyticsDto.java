@@ -32,7 +32,7 @@ public record AnalyticsDto(
     }
 
     /**
-     * Релиз: часы и задачи за период, а также дата готовности — следующий день после последнего дня
+     * Релиз: часы и задачи за период, а также дата готовности — следующий рабочий день после последнего дня
      * последней задачи релиза (по всем задачам, не только за период).
      */
     public record ReleaseStat(String release, double hours, int tasks, LocalDate lastTaskDay, LocalDate readyDay) {

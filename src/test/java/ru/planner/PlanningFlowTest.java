@@ -59,11 +59,17 @@ class PlanningFlowTest {
         assertThat(a.get("totals").get("overtime").asDouble()).isEqualTo(4.0);
         assertThat(a.get("totals").get("overtimeEmployees").asInt()).isEqualTo(1);
 
-        // готовность релиза 3.0 — следующий день после последнего дня задачи (Пн 21 → Вт 22)
+        // готовность релиза 3.0 — следующий рабочий день после последнего дня задачи (Пн 21 → Вт 22)
         JsonNode release = a.get("releases").get(0);
         assertThat(release.get("release").asText()).isEqualTo("3.0");
         assertThat(release.get("lastTaskDay").asText()).isEqualTo("2026-09-21");
         assertThat(release.get("readyDay").asText()).isEqualTo("2026-09-22");
+
+        // релиз, последняя задача которого в пятницу, готов в понедельник, а не в субботу
+        postJson("/api/tasks", "{\"employeeId\":" + emp + ",\"day\":\"2026-09-25\",\"title\":\"FRI-1\",\"release\":\"3.1\",\"estimate\":2}", 201);
+        JsonNode friday = analytics("2026-09-25", "2026-09-25").get("releases").get(0);
+        assertThat(friday.get("release").asText()).isEqualTo("3.1");
+        assertThat(friday.get("readyDay").asText()).isEqualTo("2026-09-28");
 
         // растянуть можно только задачу больше 8 часов
         mvc.perform(post("/api/tasks").with(csrf()).contentType(MediaType.APPLICATION_JSON)

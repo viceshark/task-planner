@@ -194,7 +194,7 @@ public class AnalyticsService {
             .map(en -> {
                 LocalDate last = readiness.get(en.getKey());
                 return new AnalyticsDto.ReleaseStat(en.getKey(), round(en.getValue()[0]), (int) en.getValue()[1],
-                    last, last == null ? null : last.plusDays(1));
+                    last, last == null ? null : WorkDays.nextWorkday(last));
             })
             .sorted(Comparator.comparingDouble(AnalyticsDto.ReleaseStat::hours).reversed())
             .toList();
