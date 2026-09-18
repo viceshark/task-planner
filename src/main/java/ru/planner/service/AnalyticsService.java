@@ -28,9 +28,9 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class AnalyticsService {
 
-    public static final double DAY_NORM = WorkDays.DAY_NORM;
     private static final int MAX_RANGE_DAYS = 400;
     private static final String NO_RELEASE = "Без релиза";
+    private static final String NO_EPIC = "Без эпика";
     private static final String[] WEEKDAY_LABELS = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
     private static final Pattern JIRA_KEY = Pattern.compile("(?<![\\p{L}\\d-])(\\p{Lu}[\\p{Lu}\\d]{1,14}-\\d+)(?![\\p{L}\\d])");
 
@@ -48,6 +48,8 @@ public class AnalyticsService {
         double overtime;
         int overtimeTasks;
         int tasks;
+        int earlyTasks;
+        double savedHours;
     }
 
     @Transactional(readOnly = true)
@@ -60,7 +62,8 @@ public class AnalyticsService {
         }
 
         List<Employee> employeeList = employees.findAllByOrderByPositionAscIdAsc();
-        List<Task> taskList = taskService.findIntersecting(from, to);
+        Map<Long, Double> norms = taskService.norms();
+        List<Task> taskList = taskService.findIntersecting(from, to, norms);
         List<Absence> absenceList = absences.findOverlapping(from, to);
 
         List<LocalDate> days = new ArrayList<>();
@@ -77,13 +80,15 @@ public class AnalyticsService {
             byEmployee.put(e.getId(), new Acc());
         }
         Map<String, double[]> byRelease = new LinkedHashMap<>();   // [hours, count]
+        Map<String, double[]> byEpic = new LinkedHashMap<>();
         double[] byWeekday = new double[7];
         double totalHours = 0;
 
-        // Задачи: по 8ч в день, остаток на последний день; в период попадают только дни внутри [from, to]
+        // Задачи: по норме сотрудника в день, остаток на последний; в период попадают только дни внутри [from, to]
         for (Task t : taskList) {
             Acc acc = byEmployee.get(t.getEmployeeId());
-            List<LocalDate> taskDays = WorkDays.taskDays(t);
+            double norm = TaskService.normOf(norms, t.getEmployeeId());
+            List<LocalDate> taskDays = WorkDays.taskDays(t, norm);
             boolean counted = false;
             double overtimeInRange = 0;
             for (int i = 0; i < taskDays.size(); i++) {
@@ -92,27 +97,31 @@ public class AnalyticsService {
                     continue;
                 }
                 counted = true;
-                double h = WorkDays.hoursOn(t, i);
+                double h = WorkDays.hoursOn(t, i, norm);
                 totalHours += h;
                 byWeekday[d.getDayOfWeek().getValue() - 1] += h;
-                overtimeInRange += WorkDays.overtimeOn(t, i);
+                overtimeInRange += WorkDays.overtimeOn(t, i, norm);
                 if (acc != null) {
                     acc.hours.merge(d, h, Double::sum);
                 }
             }
-            if (counted) {
-                if (acc != null) {
-                    acc.tasks++;
-                    acc.overtime += overtimeInRange;
-                    if (overtimeInRange > 0) {
-                        acc.overtimeTasks++;
-                    }
-                }
-                String release = t.getRelease() == null || t.getRelease().isBlank() ? NO_RELEASE : t.getRelease();
-                double[] r = byRelease.computeIfAbsent(release, k -> new double[2]);
-                r[0] += WorkDays.totalHours(t);
-                r[1] += 1;
+            if (!counted) {
+                continue;
             }
+            double effective = WorkDays.effectiveHours(t);
+            if (acc != null) {
+                acc.tasks++;
+                acc.overtime += overtimeInRange;
+                if (overtimeInRange > 0) {
+                    acc.overtimeTasks++;
+                }
+                if (t.isCompletedEarly()) {
+                    acc.earlyTasks++;
+                    acc.savedHours += Math.max(0, WorkDays.nz(t.getEstimate()) - effective);
+                }
+            }
+            accumulate(byRelease, blankTo(t.getRelease(), NO_RELEASE), effective);
+            accumulate(byEpic, blankTo(t.getEpic(), NO_EPIC), effective);
         }
 
         // События: простой — часы, отпуск и аренда — целые рабочие дни
@@ -121,6 +130,7 @@ public class AnalyticsService {
             if (acc == null) {
                 continue;
             }
+            double norm = TaskService.normOf(norms, a.getEmployeeId());
             LocalDate start = a.getStartDay().isBefore(from) ? from : a.getStartDay();
             LocalDate end = a.getEndDay().isAfter(to) ? to : a.getEndDay();
             for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
@@ -128,7 +138,7 @@ public class AnalyticsService {
                     continue;
                 }
                 switch (a.getType()) {
-                    case DOWNTIME -> acc.downtime.merge(d, a.getHoursPerDay() == null ? DAY_NORM : a.getHoursPerDay(), Double::sum);
+                    case DOWNTIME -> acc.downtime.merge(d, a.getHoursPerDay() == null ? norm : a.getHoursPerDay(), Double::sum);
                     case VACATION -> acc.vacation.add(d);
                     case RENTAL -> acc.rental.add(d);
                 }
@@ -142,8 +152,10 @@ public class AnalyticsService {
         double totalCapacity = 0;
         double totalOvertime = 0;
         double totalDowntime = 0;
+        double totalSaved = 0;
         int overtimeEmployees = 0;
         int overtimeTasks = 0;
+        int earlyTasks = 0;
         int downtimeDays = 0;
         int vacationDays = 0;
         int rentalDays = 0;
@@ -151,6 +163,7 @@ public class AnalyticsService {
 
         for (Employee e : employeeList) {
             Acc acc = byEmployee.get(e.getId());
+            double norm = e.dayNorm();
             double hours = 0;
             double maxDay = 0;
             double capacity = 0;
@@ -170,36 +183,39 @@ public class AnalyticsService {
                 dailyDowntime[i] += dt;
                 // простой — не рабочее время: ёмкость не уменьшает, а день без задач считается пустым
                 if (WorkDays.isWorkday(d) && !away) {
-                    capacity += DAY_NORM;
-                    dailyCapacity[i] += DAY_NORM;
+                    capacity += norm;
+                    dailyCapacity[i] += norm;
                     if (h == 0) {
                         idle++;
                     }
                 }
-                if (h > DAY_NORM) {
+                if (h > norm + 1e-9) {
                     overloaded++;
                 }
             }
             double utilization = capacity == 0 ? 0 : hours / capacity * 100;
-            employeeStats.add(new AnalyticsDto.EmployeeStat(e.getId(), e.getName(), e.getColor(), round(hours),
-                acc.tasks, capacity, round(utilization), overloaded, idle, round(maxDay),
-                round(acc.overtime), acc.overtimeTasks, round(downtime), acc.vacation.size(), acc.rental.size()));
+            employeeStats.add(new AnalyticsDto.EmployeeStat(e.getId(), e.getName(), e.getColor(), e.getRate(),
+                round(hours), acc.tasks, round(capacity), round(utilization), overloaded, idle, round(maxDay),
+                round(acc.overtime), acc.overtimeTasks, round(downtime), acc.vacation.size(), acc.rental.size(),
+                acc.earlyTasks, round(acc.savedHours)));
             series.add(new AnalyticsDto.Series(e.getId(), e.getName(), e.getColor(), data));
 
             totalCapacity += capacity;
             totalOvertime += acc.overtime;
             totalDowntime += downtime;
+            totalSaved += acc.savedHours;
             if (acc.overtime > 0) {
                 overtimeEmployees++;
             }
             overtimeTasks += acc.overtimeTasks;
+            earlyTasks += acc.earlyTasks;
             downtimeDays += acc.downtime.size();
             vacationDays += acc.vacation.size();
             rentalDays += acc.rental.size();
             totalTasks += acc.tasks;
         }
 
-        Map<String, LocalDate> readiness = releaseLastDays();
+        Map<String, LocalDate> readiness = releaseLastDays(norms);
         List<AnalyticsDto.ReleaseStat> releases = byRelease.entrySet().stream()
             .map(en -> {
                 LocalDate last = readiness.get(en.getKey());
@@ -207,6 +223,11 @@ public class AnalyticsService {
                     last, last == null ? null : WorkDays.nextWorkday(last));
             })
             .sorted(Comparator.comparingDouble(AnalyticsDto.ReleaseStat::hours).reversed())
+            .toList();
+
+        List<AnalyticsDto.GroupStat> epics = byEpic.entrySet().stream()
+            .map(en -> new AnalyticsDto.GroupStat(en.getKey(), round(en.getValue()[0]), (int) en.getValue()[1]))
+            .sorted(Comparator.comparingDouble(AnalyticsDto.GroupStat::hours).reversed())
             .toList();
 
         List<AnalyticsDto.WeekdayStat> weekdays = new ArrayList<>();
@@ -218,24 +239,24 @@ public class AnalyticsService {
 
         int releaseCount = (int) byRelease.keySet().stream().filter(r -> !NO_RELEASE.equals(r)).count();
         AnalyticsDto.Totals totals = new AnalyticsDto.Totals(
-            totalTasks, round(totalHours), employeeList.size(), releaseCount, totalCapacity,
+            totalTasks, round(totalHours), employeeList.size(), releaseCount, round(totalCapacity),
             round(totalCapacity == 0 ? 0 : totalHours / totalCapacity * 100),
             round(totalOvertime), overtimeTasks, overtimeEmployees, round(totalDowntime), downtimeDays, vacationDays,
-            rentalDays);
+            rentalDays, earlyTasks, round(totalSaved));
 
         return new AnalyticsDto(from, to, workdays, totals, employeeStats,
             days.stream().map(LocalDate::toString).toList(), series,
-            roundAll(dailyDowntime), roundAll(dailyCapacity), releases, weekdays);
+            roundAll(dailyDowntime), roundAll(dailyCapacity), releases, epics, weekdays);
     }
 
     /** Последний день последней задачи каждого релиза — по всем задачам, независимо от периода. */
-    private Map<String, LocalDate> releaseLastDays() {
+    private Map<String, LocalDate> releaseLastDays(Map<Long, Double> norms) {
         Map<String, LocalDate> out = new HashMap<>();
         for (Task t : tasks.findByReleaseIsNotNull()) {
             if (t.getRelease().isBlank()) {
                 continue;
             }
-            LocalDate last = WorkDays.lastDay(t);
+            LocalDate last = WorkDays.lastDay(t, TaskService.normOf(norms, t.getEmployeeId()));
             out.merge(t.getRelease(), last, (a, b) -> a.isAfter(b) ? a : b);
         }
         return out;
@@ -249,6 +270,16 @@ public class AnalyticsService {
             return m.group(1);
         }
         return firstLine.isEmpty() ? "(без названия)" : firstLine;
+    }
+
+    private static String blankTo(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static void accumulate(Map<String, double[]> map, String key, double hours) {
+        double[] acc = map.computeIfAbsent(key, k -> new double[2]);
+        acc[0] += hours;
+        acc[1] += 1;
     }
 
     private static int countWeekday(List<LocalDate> days, int isoWeekday) {

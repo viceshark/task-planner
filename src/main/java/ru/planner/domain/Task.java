@@ -48,11 +48,26 @@ public class Task {
     @Column(nullable = false)
     private int position;
 
-    /** На сколько рабочих дней растянута задача (пролонгация), начиная с {@link #day}. */
+    /**
+     * На сколько рабочих дней растянута задача. Значение производное (часы / норма сотрудника)
+     * и пересчитывается при каждом сохранении; источник истины — {@code WorkDays.spanDays}.
+     */
     @Column(nullable = false)
     private int days = 1;
 
     /** Часы сверх оценки: задача не уложилась в оценку, перерасход учитывается в аналитике отдельно. */
     @Column
     private Double overtime;
+
+    /** Эпик (как в Jira): свободный текст, в карточке показывается цветной меткой. */
+    @Column
+    private String epic;
+
+    /** Задача завершена досрочно: занимает {@link #spent} часов вместо оценки. */
+    @Column(name = "completed_early", nullable = false)
+    private boolean completedEarly;
+
+    /** Фактически потраченные часы (для досрочно завершённой задачи). */
+    @Column
+    private Double spent;
 }

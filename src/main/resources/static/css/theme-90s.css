@@ -769,6 +769,41 @@ html[data-theme="90s"] .sw-rental { background: #f5c9a3; box-shadow: none; }
 html[data-theme="90s"] .sw-vacation { background: #c7dff0; box-shadow: none; }
 
 html[data-theme="90s"] .span-hint.warn { color: #8a1c1c; }
+
+html[data-theme="90s"] .badge.epic {
+  border: 1px solid #000;
+  border-radius: 0;
+  color: #000;
+  background: hsl(var(--epic-h, 200) 60% 82%);
+  box-shadow: none;
+  font: 700 9px/1.5 Verdana, Geneva, sans-serif;
+  letter-spacing: 0;
+}
+
+html[data-theme="90s"] .badge.early {
+  padding: 1px 7px;
+  border: 1px solid #000;
+  border-radius: 0;
+  color: #000;
+  background: var(--ok90);
+  font: 700 9px/1.5 'Space Mono', monospace;
+  text-shadow: none;
+}
+
+html[data-theme="90s"] .task-early { border-style: double; }
+html[data-theme="90s"] .task-early .task-title { opacity: 1; }
+
+html[data-theme="90s"] .emp-rate {
+  padding: 0 4px;
+  border: 1px solid #000;
+  border-radius: 0;
+  color: #000;
+  background: #fff;
+  font: 700 9px/1.5 'Space Mono', monospace;
+}
+
+html[data-theme="90s"] .btn.active { background: var(--ok90); color: #000; box-shadow: var(--bevel-in); }
+html[data-theme="90s"] .btn-sm { padding: 3px 9px; font-size: 10px; }
 html[data-theme="90s"] .check-field .check { font: 400 10.5px/1.4 Verdana, Geneva, sans-serif; padding: 5px 0; }
 html[data-theme="90s"] .check-field input[type="checkbox"] { accent-color: #000; }
 html[data-theme="90s"] select { background-image: linear-gradient(45deg, transparent 50%, #000 50%), linear-gradient(135deg, #000 50%, transparent 50%); }

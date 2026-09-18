@@ -33,6 +33,7 @@
         <div class="glass kpi"><span class="kpi-label">Сверх оценки</span><b class="kpi-value" id="kpiOvertime">—</b><span class="kpi-sub" id="kpiOvertimeSub"></span></div>
         <div class="glass kpi"><span class="kpi-label">Простой</span><b class="kpi-value" id="kpiDowntime">—</b><span class="kpi-sub" id="kpiDowntimeSub"></span></div>
         <div class="glass kpi"><span class="kpi-label">Отпуск и аренда</span><b class="kpi-value" id="kpiAway">—</b><span class="kpi-sub" id="kpiAwaySub"></span></div>
+        <div class="glass kpi"><span class="kpi-label">Досрочно</span><b class="kpi-value" id="kpiEarly">—</b><span class="kpi-sub" id="kpiEarlySub"></span></div>
     </section>
 
     <section class="charts">
@@ -82,6 +83,10 @@
             <div class="chart-box"><canvas id="chartReleases"></canvas></div>
         </div>
         <div class="glass card">
+            <div class="card-head"><h2>Часы по эпикам</h2><span class="card-sub">распределение за период</span></div>
+            <div class="chart-box"><canvas id="chartEpics"></canvas></div>
+        </div>
+        <div class="glass card">
             <div class="card-head"><h2>Дни недели</h2><span class="card-sub">средняя нагрузка команды</span></div>
             <div class="chart-box"><canvas id="chartWeekdays"></canvas></div>
         </div>
@@ -92,6 +97,7 @@
                     <thead>
                     <tr>
                         <th>Сотрудник</th>
+                        <th class="num">Ставка</th>
                         <th class="num">Часы</th>
                         <th class="num">Ёмкость</th>
                         <th class="num">Загрузка</th>
@@ -100,6 +106,7 @@
                         <th class="num">Простой</th>
                         <th class="num">Отпуск</th>
                         <th class="num">Аренда</th>
+                        <th class="num">Досрочно</th>
                         <th class="num">Перегруз (дней)</th>
                         <th class="num">Пустых раб. дней</th>
                         <th class="num">Макс. за день</th>

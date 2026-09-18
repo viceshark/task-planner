@@ -79,27 +79,35 @@
             </label>
             <div class="field-row">
                 <label class="field">
+                    <span>Эпик</span>
+                    <input id="taskEpic" type="text" maxlength="100" list="epicList" placeholder="выберите или введите новый" autocomplete="off">
+                    <datalist id="epicList"></datalist>
+                </label>
+                <label class="field">
                     <span>Релиз</span>
-                    <input id="taskRelease" type="text" maxlength="100" list="releaseList" placeholder="например, 2.14">
+                    <input id="taskRelease" type="text" maxlength="100" list="releaseList" placeholder="например, 2.14" autocomplete="off">
                     <datalist id="releaseList"></datalist>
                 </label>
+            </div>
+            <div class="field-row">
                 <label class="field">
                     <span>Оценка, ч</span>
                     <input id="taskEstimate" type="number" min="0" max="720" step="0.5" placeholder="8">
                 </label>
-            </div>
-            <div class="field-row">
                 <label class="field">
                     <span>Сверх оценки, ч</span>
                     <input id="taskOvertime" type="number" min="0" max="240" step="0.5" placeholder="0">
                     <small class="field-hint">если задача не уложилась в оценку</small>
                 </label>
-                <label class="field check-field">
-                    <span>Пролонгация</span>
-                    <span class="check"><input id="taskStretch" type="checkbox"> растянуть по рабочим дням, 8ч в день</span>
-                </label>
             </div>
             <small class="field-hint span-hint" id="spanHint"></small>
+            <div class="early-block" id="earlyBlock">
+                <button type="button" class="btn btn-sm" id="earlyToggle">✓ Завершено досрочно</button>
+                <label class="field early-field" id="earlyField" hidden>
+                    <span>Фактически потрачено, ч</span>
+                    <input id="taskSpent" type="number" min="0" max="720" step="0.5" placeholder="0">
+                </label>
+            </div>
         </div>
 
         <div id="absenceFields" class="fields-block" hidden>
@@ -143,10 +151,17 @@
         <div class="modal-head">
             <h2 id="employeeDialogTitle">Новый сотрудник</h2>
         </div>
-        <label class="field">
-            <span>Имя</span>
-            <input id="employeeName" type="text" maxlength="100" required placeholder="Имя сотрудника">
-        </label>
+        <div class="field-row">
+            <label class="field">
+                <span>Имя</span>
+                <input id="employeeName" type="text" maxlength="100" required placeholder="Имя сотрудника">
+            </label>
+            <label class="field rate-field">
+                <span>Ставка</span>
+                <input id="employeeRate" type="number" min="0.1" max="2" step="0.05" value="1">
+                <small class="field-hint" id="rateHint">1 = 8ч в день</small>
+            </label>
+        </div>
         <div class="field">
             <span>Цвет</span>
             <div class="palette" id="palette"></div>

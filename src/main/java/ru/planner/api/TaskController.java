@@ -43,6 +43,11 @@ public class TaskController {
         return tasks.releases();
     }
 
+    @GetMapping("/epics")
+    public List<String> epics() {
+        return tasks.epics();
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TaskDto create(@Valid @RequestBody TaskCreateRequest request) {

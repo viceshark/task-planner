@@ -37,10 +37,12 @@ class PlanningFlowTest {
     void spannedTaskWithOvertimeIsSpreadAcrossWorkdays() throws Exception {
         long emp = createEmployee("Олег");
 
-        // оценка 20ч + 4ч сверх оценки, растянуть: 24ч → 3 рабочих дня по 8ч начиная с четверга: Чт 17, Пт 18, Пн 21
+        // оценка 20ч + 4ч сверх оценки: 24ч растягиваются автоматически на 3 рабочих дня по 8ч: Чт 17, Пт 18, Пн 21
         JsonNode task = postJson("/api/tasks", "{\"employeeId\":" + emp + ",\"day\":\"2026-09-17\",\"title\":\"BIG-1\","
-            + "\"release\":\"3.0\",\"estimate\":20,\"days\":2,\"overtime\":4}", 201);
-        assertThat(task.get("days").asInt()).isEqualTo(3);   // сервер считает дни по норме, а не по запросу
+            + "\"release\":\"3.0\",\"epic\":\"Платежи\",\"estimate\":20,\"overtime\":4}", 201);
+        assertThat(task.get("days").asInt()).isEqualTo(3);
+        assertThat(task.get("hours").asDouble()).isEqualTo(24.0);
+        assertThat(task.get("epic").asText()).isEqualTo("Платежи");
         assertThat(task.get("overtime").asDouble()).isEqualTo(4.0);
 
         // задача видна в периоде, куда попадает только её последний день
@@ -75,14 +77,34 @@ class PlanningFlowTest {
         assertThat(friday.get("release").asText()).isEqualTo("3.1");
         assertThat(friday.get("readyDay").asText()).isEqualTo("2026-09-28");
 
-        // задача не больше 8 часов всегда в один день, даже если просили растянуть; 12ч → 2 дня (8 + 4)
-        assertThat(postJson("/api/tasks", "{\"employeeId\":" + emp + ",\"day\":\"2026-09-17\",\"title\":\"small\",\"estimate\":4,\"days\":2}", 201)
+        // задача не больше 8 часов в один день; 12ч → 2 дня (8 + 4)
+        assertThat(postJson("/api/tasks", "{\"employeeId\":" + emp + ",\"day\":\"2026-09-17\",\"title\":\"small\",\"estimate\":4}", 201)
             .get("days").asInt()).isEqualTo(1);
-        assertThat(postJson("/api/tasks", "{\"employeeId\":" + emp + ",\"day\":\"2026-09-28\",\"title\":\"twelve\",\"estimate\":12,\"days\":2}", 201)
-            .get("days").asInt()).isEqualTo(2);
+        JsonNode twelveTask = postJson("/api/tasks", "{\"employeeId\":" + emp + ",\"day\":\"2026-09-28\",\"title\":\"twelve\",\"estimate\":12}", 201);
+        assertThat(twelveTask.get("days").asInt()).isEqualTo(2);
         JsonNode twelve = employee(analytics("2026-09-28", "2026-09-29"), emp);
         assertThat(twelve.get("hours").asDouble()).isEqualTo(12.0);
         assertThat(twelve.get("maxDayHours").asDouble()).isEqualTo(8.0);
+
+        // эпики в аналитике и в справочнике
+        assertThat(analytics("2026-09-14", "2026-09-25").get("epics").get(0).get("name").asText()).isEqualTo("Платежи");
+        mvc.perform(get("/api/tasks/epics")).andExpect(jsonPath("$[?(@ == 'Платежи')]").exists());
+
+        // досрочное завершение: 12ч задача сделана за 5ч — занимает один день, сэкономлено 7ч
+        long twelveId = twelveTask.get("id").asLong();
+        JsonNode early = json.readTree(mvc.perform(put("/api/tasks/" + twelveId).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"twelve\",\"estimate\":12,\"overtime\":3,\"completedEarly\":true,\"spent\":5}"))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(early.get("completedEarly").asBoolean()).isTrue();
+        assertThat(early.get("days").asInt()).isEqualTo(1);
+        assertThat(early.get("hours").asDouble()).isEqualTo(5.0);
+        assertThat(early.get("overtime").isNull()).isTrue();   // сверх оценки у досрочной задачи не бывает
+        JsonNode earlyStat = employee(analytics("2026-09-28", "2026-09-29"), emp);
+        assertThat(earlyStat.get("hours").asDouble()).isEqualTo(5.0);
+        assertThat(earlyStat.get("earlyTasks").asInt()).isEqualTo(1);
+        assertThat(earlyStat.get("savedHours").asDouble()).isEqualTo(7.0);
+        assertThat(analytics("2026-09-28", "2026-09-29").get("totals").get("earlyTasks").asInt()).isEqualTo(1);
     }
 
     @Test
@@ -136,6 +158,33 @@ class PlanningFlowTest {
         mvc.perform(delete("/api/employees/" + emp).with(csrf())).andExpect(status().isNoContent());
         mvc.perform(get("/api/absences").param("from", "2026-09-14").param("to", "2026-09-25"))
             .andExpect(jsonPath("$[?(@.employeeId == " + emp + ")].length()").isEmpty());
+    }
+
+    @Test
+    void halfRateEmployeeStretchesTasksFromFourHours() throws Exception {
+        long emp = postJson("/api/employees", "{\"name\":\"Полставки\",\"color\":\"#ffd166\",\"rate\":0.5}", 201)
+            .get("id").asLong();
+        // 12ч при норме 4ч в день: Пн 5.10, Вт 6.10, Ср 7.10 по 4ч
+        JsonNode t = postJson("/api/tasks", "{\"employeeId\":" + emp + ",\"day\":\"2026-10-05\",\"title\":\"HALF-1\",\"estimate\":12}", 201);
+        assertThat(t.get("days").asInt()).isEqualTo(3);
+        JsonNode stat = employee(analytics("2026-10-05", "2026-10-09"), emp);
+        assertThat(stat.get("rate").asDouble()).isEqualTo(0.5);
+        assertThat(stat.get("capacity").asDouble()).isEqualTo(20.0);   // 5 рабочих дней × 4ч
+        assertThat(stat.get("hours").asDouble()).isEqualTo(12.0);
+        assertThat(stat.get("maxDayHours").asDouble()).isEqualTo(4.0);
+        assertThat(stat.get("overloadedDays").asInt()).isEqualTo(0);
+        assertThat(stat.get("utilization").asDouble()).isEqualTo(60.0);
+
+        // смена ставки на полную пересчитывает растяжку: 12ч → 2 дня
+        mvc.perform(put("/api/employees/" + emp).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Полставки\",\"color\":\"#ffd166\",\"rate\":1}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.rate").value(1.0));
+        mvc.perform(get("/api/tasks").param("from", "2026-10-05").param("to", "2026-10-05"))
+            .andExpect(jsonPath("$[0].days").value(2));
+        // и на среду задача больше не попадает
+        mvc.perform(get("/api/tasks").param("from", "2026-10-07").param("to", "2026-10-07"))
+            .andExpect(jsonPath("$.length()").value(0));
     }
 
     private JsonNode analytics(String from, String to) throws Exception {

@@ -2,7 +2,8 @@ CREATE TABLE IF NOT EXISTS employees (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     name      TEXT    NOT NULL,
     color     TEXT    NOT NULL,
-    position  INTEGER NOT NULL DEFAULT 0
+    position  INTEGER NOT NULL DEFAULT 0,
+    rate      REAL    NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -14,7 +15,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     estimate     REAL,
     position     INTEGER NOT NULL DEFAULT 0,
     days         INTEGER NOT NULL DEFAULT 1,
-    overtime     REAL
+    overtime     REAL,
+    epic         TEXT,
+    completed_early INTEGER NOT NULL DEFAULT 0,
+    spent        REAL
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_day ON tasks(day);

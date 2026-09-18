@@ -34,6 +34,7 @@ public class EmployeeService {
         Employee e = new Employee();
         e.setName(request.name().trim());
         e.setColor(colorOrDefault(request.color()));
+        e.setRate(request.rate() == null ? 1.0 : request.rate());
         e.setPosition(employees.maxPosition() + 1);
         return EmployeeDto.from(employees.save(e));
     }
@@ -43,6 +44,9 @@ public class EmployeeService {
         Employee e = get(id);
         e.setName(request.name().trim());
         e.setColor(colorOrDefault(request.color()));
+        if (request.rate() != null) {
+            e.setRate(request.rate());
+        }
         return EmployeeDto.from(employees.save(e));
     }
 

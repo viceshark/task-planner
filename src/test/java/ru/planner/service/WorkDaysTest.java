@@ -4,11 +4,20 @@ import org.junit.jupiter.api.Test;
 import ru.planner.domain.Task;
 
 import java.time.LocalDate;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class WorkDaysTest {
+
+    private static final double FULL = 8.0;
+
+    private static Task task(double estimate, Double overtime) {
+        Task t = new Task();
+        t.setDay(LocalDate.of(2026, 9, 14));
+        t.setEstimate(estimate);
+        t.setOvertime(overtime);
+        return t;
+    }
 
     @Test
     void spanSkipsWeekends() {
@@ -25,54 +34,59 @@ class WorkDaysTest {
     }
 
     @Test
-    void singleDayTaskOccupiesOnlyItsDayEvenOnWeekend() {
-        assertThat(WorkDays.taskDays(LocalDate.of(2026, 9, 19), 1)).containsExactly(LocalDate.of(2026, 9, 19));
-        assertThat(WorkDays.taskDays(LocalDate.of(2026, 9, 19), 0)).hasSize(1);
+    void hoursFillNormPerDayWithRemainderOnLastDay() {
+        Task t = task(12, null);
+        assertThat(WorkDays.spanDays(t, FULL)).isEqualTo(2);
+        assertThat(WorkDays.hoursOn(t, 0, FULL)).isEqualTo(8.0);
+        assertThat(WorkDays.hoursOn(t, 1, FULL)).isEqualTo(4.0);
+        assertThat(WorkDays.hoursOn(t, 2, FULL)).isEqualTo(0.0);
+        assertThat(WorkDays.lastDay(t, FULL)).isEqualTo(LocalDate.of(2026, 9, 15));
     }
 
     @Test
-    void hoursFillEightPerDayWithRemainderOnLastDay() {
-        Task t = new Task();
-        t.setDay(LocalDate.of(2026, 9, 14));
-        t.setEstimate(12.0);
-        t.setDays(WorkDays.spanDays(12));
-        assertThat(t.getDays()).isEqualTo(2);
-        assertThat(WorkDays.hoursOn(t, 0)).isEqualTo(8.0);
-        assertThat(WorkDays.hoursOn(t, 1)).isEqualTo(4.0);
-        assertThat(WorkDays.hoursOn(t, 2)).isEqualTo(0.0);
-        assertThat(WorkDays.lastDay(t)).isEqualTo(LocalDate.of(2026, 9, 15));
+    void halfRateEmployeeHasFourHourDays() {
+        Task t = task(12, null);
+        double half = 4.0;
+        assertThat(WorkDays.spanDays(t, half)).isEqualTo(3);
+        assertThat(WorkDays.hoursOn(t, 0, half)).isEqualTo(4.0);
+        assertThat(WorkDays.hoursOn(t, 2, half)).isEqualTo(4.0);
+        // 6ч при ставке 0.5 — два дня: 4 + 2
+        Task six = task(6, null);
+        assertThat(WorkDays.spanDays(six, half)).isEqualTo(2);
+        assertThat(WorkDays.hoursOn(six, 1, half)).isEqualTo(2.0);
+        // при полной ставке та же задача помещается в один день
+        assertThat(WorkDays.spanDays(six, FULL)).isEqualTo(1);
     }
 
     @Test
     void spanDaysByNorm() {
-        assertThat(WorkDays.spanDays(8)).isEqualTo(1);
-        assertThat(WorkDays.spanDays(8.5)).isEqualTo(2);
-        assertThat(WorkDays.spanDays(16)).isEqualTo(2);
-        assertThat(WorkDays.spanDays(24)).isEqualTo(3);
-        assertThat(WorkDays.spanDays(1000)).isEqualTo(WorkDays.MAX_SPAN);
+        assertThat(WorkDays.spanDays(8, FULL)).isEqualTo(1);
+        assertThat(WorkDays.spanDays(8.5, FULL)).isEqualTo(2);
+        assertThat(WorkDays.spanDays(24, FULL)).isEqualTo(3);
+        assertThat(WorkDays.spanDays(10000, FULL)).isEqualTo(WorkDays.MAX_SPAN);
+        assertThat(WorkDays.spanDays(0, FULL)).isEqualTo(1);
     }
 
     @Test
     void overtimeIsWhatExceedsEstimateAndLandsOnLastDays() {
         // оценка 10ч, реально ушло 20ч (10 сверх): дни 8 / 8 / 4 — оценка кончается на втором дне
-        Task t = new Task();
-        t.setDay(LocalDate.of(2026, 9, 14));
-        t.setEstimate(10.0);
-        t.setOvertime(10.0);
-        t.setDays(WorkDays.spanDays(20));
-        assertThat(t.getDays()).isEqualTo(3);
-        assertThat(WorkDays.overtimeOn(t, 0)).isEqualTo(0.0);
-        assertThat(WorkDays.overtimeOn(t, 1)).isEqualTo(6.0);
-        assertThat(WorkDays.overtimeOn(t, 2)).isEqualTo(4.0);
-        assertThat(WorkDays.totalHours(t)).isEqualTo(20.0);
+        Task t = task(10, 10.0);
+        assertThat(WorkDays.spanDays(t, FULL)).isEqualTo(3);
+        assertThat(WorkDays.overtimeOn(t, 0, FULL)).isEqualTo(0.0);
+        assertThat(WorkDays.overtimeOn(t, 1, FULL)).isEqualTo(6.0);
+        assertThat(WorkDays.overtimeOn(t, 2, FULL)).isEqualTo(4.0);
+        assertThat(WorkDays.effectiveHours(t)).isEqualTo(20.0);
+    }
 
-        // без растяжки всё в одном дне: 12ч, из них 4 сверх оценки
-        Task single = new Task();
-        single.setDay(LocalDate.of(2026, 9, 14));
-        single.setEstimate(8.0);
-        single.setOvertime(4.0);
-        single.setDays(1);
-        assertThat(WorkDays.hoursOn(single, 0)).isEqualTo(12.0);
-        assertThat(WorkDays.overtimeOn(single, 0)).isEqualTo(4.0);
+    @Test
+    void completedEarlyTaskOccupiesSpentHoursOnly() {
+        Task t = task(20, 4.0);
+        t.setCompletedEarly(true);
+        t.setSpent(6.0);
+        assertThat(WorkDays.effectiveHours(t)).isEqualTo(6.0);
+        assertThat(WorkDays.effectiveOvertime(t)).isEqualTo(0.0);
+        assertThat(WorkDays.spanDays(t, FULL)).isEqualTo(1);
+        assertThat(WorkDays.hoursOn(t, 0, FULL)).isEqualTo(6.0);
+        assertThat(WorkDays.overtimeOn(t, 0, FULL)).isEqualTo(0.0);
     }
 }

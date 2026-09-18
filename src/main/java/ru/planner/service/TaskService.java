@@ -7,12 +7,16 @@ import ru.planner.api.dto.TaskCreateRequest;
 import ru.planner.api.dto.TaskDto;
 import ru.planner.api.dto.TaskMoveRequest;
 import ru.planner.api.dto.TaskUpdateRequest;
+import ru.planner.domain.Employee;
 import ru.planner.domain.Task;
 import ru.planner.repo.EmployeeRepository;
 import ru.planner.repo.TaskRepository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,12 +31,23 @@ public class TaskService {
         if (to.isBefore(from)) {
             throw new IllegalArgumentException("Дата окончания раньше даты начала");
         }
-        return findIntersecting(from, to).stream().map(TaskDto::from).toList();
+        Map<Long, Double> norms = norms();
+        return findIntersecting(from, to, norms).stream().map(t -> toDto(t, norms)).toList();
     }
 
-    List<Task> findIntersecting(LocalDate from, LocalDate to) {
+    /** Норма дня каждого сотрудника (8ч × ставка). */
+    Map<Long, Double> norms() {
+        return employees.findAll().stream().collect(Collectors.toMap(Employee::getId, Employee::dayNorm));
+    }
+
+    static double normOf(Map<Long, Double> norms, Long employeeId) {
+        return norms.getOrDefault(employeeId, WorkDays.DAY_NORM);
+    }
+
+    List<Task> findIntersecting(LocalDate from, LocalDate to, Map<Long, Double> norms) {
         return tasks.findByDayBetweenOrderByDayAscPositionAscIdAsc(from.minusDays(WorkDays.SPAN_LOOKBACK), to).stream()
-            .filter(t -> WorkDays.taskDays(t).stream().anyMatch(d -> !d.isBefore(from) && !d.isAfter(to)))
+            .filter(t -> WorkDays.taskDays(t, normOf(norms, t.getEmployeeId())).stream()
+                .anyMatch(d -> !d.isBefore(from) && !d.isAfter(to)))
             .toList();
     }
 
@@ -41,44 +56,55 @@ public class TaskService {
         return tasks.findDistinctReleases();
     }
 
+    @Transactional(readOnly = true)
+    public List<String> epics() {
+        return tasks.findDistinctEpics();
+    }
+
     @Transactional
     public TaskDto create(TaskCreateRequest request) {
-        requireEmployee(request.employeeId());
+        Employee e = requireEmployee(request.employeeId());
         Task t = new Task();
         t.setEmployeeId(request.employeeId());
         t.setDay(request.day());
         t.setTitle(request.title().trim());
         t.setRelease(normalize(request.release()));
+        t.setEpic(normalize(request.epic()));
         t.setEstimate(request.estimate());
         t.setOvertime(zeroToNull(request.overtime()));
-        t.setDays(span(request.days(), request.estimate(), request.overtime()));
+        applyCompletion(t, request.completedEarly(), request.spent());
+        t.setDays(WorkDays.spanDays(t, e.dayNorm()));
         t.setPosition(tasks.maxPosition(request.employeeId(), request.day()) + 1);
-        return TaskDto.from(tasks.save(t));
+        return toDto(tasks.save(t), e.dayNorm());
     }
 
     @Transactional
     public TaskDto update(Long id, TaskUpdateRequest request) {
         Task t = get(id);
+        Employee e = requireEmployee(t.getEmployeeId());
         t.setTitle(request.title().trim());
         t.setRelease(normalize(request.release()));
+        t.setEpic(normalize(request.epic()));
         t.setEstimate(request.estimate());
         t.setOvertime(zeroToNull(request.overtime()));
-        t.setDays(span(request.days(), request.estimate(), request.overtime()));
-        return TaskDto.from(tasks.save(t));
+        applyCompletion(t, request.completedEarly(), request.spent());
+        t.setDays(WorkDays.spanDays(t, e.dayNorm()));
+        return toDto(tasks.save(t), e.dayNorm());
     }
 
-    /** Перенос в другую ячейку: релиз, оценка, растяжка и часы сверх оценки остаются у задачи, меняются сотрудник и день начала. */
+    /** Перенос в другую ячейку: все атрибуты остаются у задачи, меняются сотрудник и день начала. */
     @Transactional
     public TaskDto move(Long id, TaskMoveRequest request) {
         Task t = get(id);
-        requireEmployee(request.employeeId());
+        Employee e = requireEmployee(request.employeeId());
         boolean sameCell = t.getEmployeeId().equals(request.employeeId()) && t.getDay().equals(request.day());
         if (!sameCell) {
             t.setEmployeeId(request.employeeId());
             t.setDay(request.day());
             t.setPosition(tasks.maxPosition(request.employeeId(), request.day()) + 1);
         }
-        return TaskDto.from(tasks.save(t));
+        t.setDays(WorkDays.spanDays(t, e.dayNorm()));
+        return toDto(tasks.save(t), e.dayNorm());
     }
 
     @Transactional
@@ -87,24 +113,35 @@ public class TaskService {
     }
 
     /**
-     * Пролонгация: если задачу просят растянуть (days > 1), число дней считается по норме —
-     * 8ч в день, остаток на последний день (12ч → 2 дня). Задача не больше 8ч всегда в один день.
+     * Досрочное завершение: задача занимает фактически потраченные часы вместо оценки,
+     * часы сверх оценки при этом теряют смысл и сбрасываются.
      */
-    private static int span(Integer days, Double estimate, Double overtime) {
-        if (days == null || days <= 1) {
-            return 1;
+    private static void applyCompletion(Task t, Boolean completedEarly, Double spent) {
+        boolean early = Boolean.TRUE.equals(completedEarly);
+        t.setCompletedEarly(early);
+        if (early) {
+            t.setSpent(spent == null ? WorkDays.nz(t.getEstimate()) : spent);
+            t.setOvertime(null);
+        } else {
+            t.setSpent(null);
         }
-        return WorkDays.spanDays(WorkDays.nz(estimate) + WorkDays.nz(overtime));
+    }
+
+    private TaskDto toDto(Task t, Map<Long, Double> norms) {
+        return toDto(t, normOf(norms, t.getEmployeeId()));
+    }
+
+    private static TaskDto toDto(Task t, double norm) {
+        return TaskDto.from(t, WorkDays.spanDays(t, norm), WorkDays.effectiveHours(t));
     }
 
     private Task get(Long id) {
         return tasks.findById(id).orElseThrow(() -> new NotFoundException("Задача не найдена: " + id));
     }
 
-    private void requireEmployee(Long employeeId) {
-        if (!employees.existsById(employeeId)) {
-            throw new NotFoundException("Сотрудник не найден: " + employeeId);
-        }
+    private Employee requireEmployee(Long employeeId) {
+        return employees.findById(employeeId)
+            .orElseThrow(() -> new NotFoundException("Сотрудник не найден: " + employeeId));
     }
 
     private static String normalize(String value) {
@@ -117,5 +154,11 @@ public class TaskService {
 
     private static Double zeroToNull(Double value) {
         return value == null || value == 0 ? null : value;
+    }
+
+    /** Для аналитики: функция нормы по id сотрудника. */
+    Function<Long, Double> normFunction() {
+        Map<Long, Double> norms = norms();
+        return id -> normOf(norms, id);
     }
 }

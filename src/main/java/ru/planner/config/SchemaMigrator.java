@@ -25,6 +25,10 @@ public class SchemaMigrator {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         addColumnIfMissing(jdbc, "tasks", "days", "INTEGER NOT NULL DEFAULT 1");
         addColumnIfMissing(jdbc, "tasks", "overtime", "REAL");
+        addColumnIfMissing(jdbc, "tasks", "epic", "TEXT");
+        addColumnIfMissing(jdbc, "tasks", "completed_early", "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(jdbc, "tasks", "spent", "REAL");
+        addColumnIfMissing(jdbc, "employees", "rate", "REAL NOT NULL DEFAULT 1");
     }
 
     private static void addColumnIfMissing(JdbcTemplate jdbc, String table, String column, String definition) {

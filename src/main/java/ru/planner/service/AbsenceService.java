@@ -7,6 +7,7 @@ import ru.planner.api.dto.AbsenceDto;
 import ru.planner.api.dto.AbsenceRequest;
 import ru.planner.domain.Absence;
 import ru.planner.domain.AbsenceType;
+import ru.planner.domain.Employee;
 import ru.planner.repo.AbsenceRepository;
 import ru.planner.repo.EmployeeRepository;
 
@@ -52,9 +53,8 @@ public class AbsenceService {
     }
 
     private void apply(Absence a, AbsenceRequest request) {
-        if (!employees.existsById(request.employeeId())) {
-            throw new NotFoundException("Сотрудник не найден: " + request.employeeId());
-        }
+        Employee e = employees.findById(request.employeeId())
+            .orElseThrow(() -> new NotFoundException("Сотрудник не найден: " + request.employeeId()));
         if (request.endDay().isBefore(request.startDay())) {
             throw new IllegalArgumentException("Дата окончания раньше даты начала");
         }
@@ -66,13 +66,13 @@ public class AbsenceService {
         a.setStartDay(request.startDay());
         a.setEndDay(request.endDay());
         // часы в день имеют смысл только для простоя; отпуск и аренда занимают весь день
-        a.setHoursPerDay(request.type() == AbsenceType.DOWNTIME ? fullDayToNull(request.hoursPerDay()) : null);
+        a.setHoursPerDay(request.type() == AbsenceType.DOWNTIME ? fullDayToNull(request.hoursPerDay(), e.dayNorm()) : null);
         String note = request.note() == null ? "" : request.note().trim();
         a.setNote(note.isEmpty() ? null : note);
     }
 
-    private static Double fullDayToNull(Double hours) {
-        return hours == null || hours >= WorkDays.DAY_NORM ? null : hours;
+    private static Double fullDayToNull(Double hours, double norm) {
+        return hours == null || hours >= norm ? null : hours;
     }
 
     private Absence get(Long id) {

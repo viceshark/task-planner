@@ -16,7 +16,7 @@
 
   const CHUNK = 14;       // дней за одну подгрузку
   const EDGE = 900;       // за сколько px до края начинать подгрузку
-  const NORM = 8;         // норма часов в день
+  const NORM = 8;         // норма часов в день при ставке 1
 
   const ABS = {
     DOWNTIME: { label: 'Простой', cls: 'abs-downtime', noteLabel: 'Причина', notePlaceholder: 'например, ждём макеты' },
@@ -37,6 +37,7 @@
     drag: null,           // { type: 'task' | 'emp', id }
     hover: null,          // подсвеченная цель drop
     releases: new Set(),
+    epics: new Set(),
     viewMonth: null       // месяц (yyyy-MM), который сейчас виден слева
   };
   const els = { heads: new Map(), rows: new Map(), cells: new Map() };
@@ -46,27 +47,48 @@
 
   /* ---------- Задачи: дни и часы ---------- */
 
-  /** Дни задачи: день начала (даже выходной), затем следующие рабочие дни — всего t.days штук. */
+  /** Норма дня сотрудника: 8ч × ставка. */
+  function normFor(empId) {
+    const emp = employeeById(empId);
+    return NORM * (emp && emp.rate ? Number(emp.rate) : 1);
+  }
+
+  /** Часы, которые задача занимает в календаре (сервер отдаёт готовое значение: досрочная — потраченные). */
+  const taskTotal = (t) => (t.hours !== undefined && t.hours !== null
+    ? Number(t.hours)
+    : (t.completedEarly && t.spent !== null && t.spent !== undefined ? Number(t.spent) : (Number(t.estimate) || 0) + (Number(t.overtime) || 0)));
+
+  /** Сколько рабочих дней займёт задача: по норме в день, остаток на последний (12ч при 8 → 2 дня). */
+  const spanDays = (total, norm) => (norm > 0 ? Math.max(1, Math.min(60, Math.ceil(total / norm - 1e-9))) : 1);
+  const taskSpan = (t) => (t.days && t.days > 0 ? t.days : spanDays(taskTotal(t), normFor(t.employeeId)));
+
+  /** Дни задачи: день начала (даже выходной), затем следующие рабочие дни. */
   function taskDays(t) {
     const out = [t.day];
     let cur = t.day;
-    while (out.length < Math.max(1, t.days || 1)) {
+    const days = taskSpan(t);
+    while (out.length < days) {
       cur = D.addDays(cur, 1);
       if (!D.isWeekend(cur)) out.push(cur);
     }
     return out;
   }
 
-  const taskTotal = (t) => (Number(t.estimate) || 0) + (Number(t.overtime) || 0);
-  /** Сколько рабочих дней займёт задача при растяжке: по 8ч в день, остаток на последний. */
-  const spanDays = (total) => Math.max(1, Math.min(30, Math.ceil(total / NORM - 1e-9)));
-  /** Часы задачи в её день с индексом idx: 12ч → 8 + 4. */
+  /** Часы задачи в её день с индексом idx: по норме сотрудника в день, остаток на последний. */
   function taskHoursOn(t, idx) {
     const total = taskTotal(t);
-    const days = Math.max(1, t.days || 1);
+    const norm = normFor(t.employeeId);
+    const days = taskSpan(t);
     if (idx < 0 || idx >= days) return 0;
-    if (idx === days - 1) return Math.max(0, total - NORM * idx);
-    return Math.max(0, Math.min(NORM, total - NORM * idx));
+    if (idx === days - 1) return Math.max(0, total - norm * idx);
+    return Math.max(0, Math.min(norm, total - norm * idx));
+  }
+
+  /** Стабильный оттенок для эпика: одинаковое имя — одинаковый цвет. */
+  function epicHue(name) {
+    let h = 0;
+    for (const ch of String(name)) h = (h * 31 + ch.codePointAt(0)) % 360;
+    return h;
   }
 
   /* ---------- Данные ---------- */
@@ -83,7 +105,16 @@
       state.tasks.set(t.id, t);
       for (const day of taskDays(t)) pushTo(state.cells, cellKey(t.employeeId, day), t.id);
       if (t.release) state.releases.add(t.release);
+      if (t.epic) state.epics.add(t.epic);
     }
+  }
+
+  /** Перечитать задачи загруженного периода (после смены ставки сотрудника меняется растяжка). */
+  async function reloadTasks() {
+    state.tasks.clear();
+    state.cells.clear();
+    ingestTasks(await api('GET', `/api/tasks?from=${state.start}&to=${state.end}`));
+    renderDays(D.range(state.start, state.end));
   }
 
   function removeTask(id) {
@@ -185,9 +216,11 @@
     el.dataset.emp = emp.id;
     el.title = 'Перетащите, чтобы изменить порядок. Клик — редактировать';
     el.style.setProperty('--emp-color', emp.color);
+    const rate = Number(emp.rate) || 1;
     el.innerHTML = `<span class="grip" aria-hidden="true"></span>` +
       `<span class="dot"></span>` +
       `<span class="emp-name">${escapeHtml(emp.name)}</span>` +
+      (rate !== 1 ? `<span class="emp-rate" title="Ставка ${rate}: ${fmtHours(NORM * rate)} в день">×${rate}</span>` : '') +
       `<span class="emp-total" title="Часы задач за месяц в поле зрения"></span>`;
     return el;
   }
@@ -253,18 +286,21 @@
     el.style.setProperty('--emp-color', emp ? emp.color : '#00e5ff');
     if (!isStart) el.title = 'Продолжение задачи, начатой ' + D.long(t.day);
 
+    if (t.completedEarly) el.classList.add('task-early');
     const hasEstimate = t.estimate !== null && t.estimate !== undefined;
-    const hours = spanned ? fmtHours(taskHoursOn(t, Math.max(0, part))) : (hasEstimate || t.overtime ? fmtHours(taskTotal(t)) : '');
+    const hours = spanned ? fmtHours(taskHoursOn(t, Math.max(0, part))) : (hasEstimate || t.overtime || t.completedEarly ? fmtHours(taskTotal(t)) : '');
     const meta = [];
     if (t.release) meta.push(`<span class="badge rel" title="Релиз">${escapeHtml(t.release)}</span>`);
     if (spanned) meta.push(`<span class="badge span" title="Растянута на ${days.length} раб. дн., всего ${fmtHours(taskTotal(t))}">${part + 1}/${days.length}</span>`);
-    if (t.overtime) meta.push(`<span class="badge ot" title="Сверх оценки ${fmtHours(t.estimate || 0)}">+${fmtHours(t.overtime)}</span>`);
+    if (t.overtime && !t.completedEarly) meta.push(`<span class="badge ot" title="Сверх оценки ${fmtHours(t.estimate || 0)}">+${fmtHours(t.overtime)}</span>`);
+    if (t.completedEarly) meta.push(`<span class="badge early" title="Завершено досрочно: потрачено ${fmtHours(t.spent || 0)} из ${fmtHours(t.estimate || 0)}">✓ ${fmtHours(t.spent || 0)}/${fmtHours(t.estimate || 0)}</span>`);
     if (hours) meta.push(`<span class="est" title="${spanned ? 'Часов в этот день' : 'Часы задачи'}">${hours}</span>`);
+    const epic = t.epic ? `<span class="badge epic" style="--epic-h:${epicHue(t.epic)}" title="Эпик">${escapeHtml(t.epic)}</span>` : '';
 
     el.innerHTML =
       `<div class="task-head"><span class="task-sq"></span><span class="task-short">${escapeHtml(shortId(t.title))}</span>` +
       `<span class="task-hours">${hours}</span></div>` +
-      `<div class="task-body"><div class="task-title">${linkify(t.title, state.jiraBase)}</div>` +
+      `<div class="task-body">${epic}<div class="task-title">${linkify(t.title, state.jiraBase)}</div>` +
       (meta.length ? `<div class="task-meta">${meta.join('')}</div>` : '') + '</div>';
     return el;
   }
@@ -301,11 +337,12 @@
     let sum = tasks.reduce((s, t) => s + taskHoursOn(t, taskDays(t).indexOf(day)), 0);
     sum = Math.round(sum * 100) / 100;
 
+    const norm = normFor(empId);
     const sumEl = el.querySelector('.sum');
     let cls = 'sum ';
     if (sum === 0) cls += 'zero';
-    else if (sum < NORM) cls += 'under';
-    else if (sum === NORM) cls += 'ok';
+    else if (sum < norm - 1e-9) cls += 'under';
+    else if (Math.abs(sum - norm) < 1e-9) cls += 'ok';
     else cls += 'over';
     sumEl.className = cls;
     sumEl.textContent = tasks.length ? 'Σ ' + fmtHours(sum) : '';
@@ -636,10 +673,14 @@
   const f = {
     title: document.getElementById('taskTitle'),
     release: document.getElementById('taskRelease'),
+    epic: document.getElementById('taskEpic'),
     estimate: document.getElementById('taskEstimate'),
-    stretch: document.getElementById('taskStretch'),
     overtime: document.getElementById('taskOvertime'),
     spanHint: document.getElementById('spanHint'),
+    earlyBlock: document.getElementById('earlyBlock'),
+    earlyToggle: document.getElementById('earlyToggle'),
+    earlyField: document.getElementById('earlyField'),
+    spent: document.getElementById('taskSpent'),
     absEmployee: document.getElementById('absEmployee'),
     absFrom: document.getElementById('absFrom'),
     absTo: document.getElementById('absTo'),
@@ -702,9 +743,11 @@
     const t = ctx.task;
     f.title.value = t ? t.title : '';
     f.release.value = t && t.release ? t.release : '';
+    f.epic.value = t && t.epic ? t.epic : '';
     f.estimate.value = t && t.estimate !== null && t.estimate !== undefined ? t.estimate : '';
-    f.stretch.checked = Boolean(t && t.days > 1);
     f.overtime.value = t && t.overtime ? t.overtime : '';
+    setEarly(Boolean(t && t.completedEarly), t && t.spent !== null && t.spent !== undefined ? t.spent : '');
+    f.earlyBlock.hidden = !t;   // досрочно завершить можно только существующую задачу
 
     // событие
     const a = ctx.absence;
@@ -715,38 +758,53 @@
     f.absNote.value = a && a.note ? a.note : '';
 
     refreshReleaseList();
+    refreshEpicList();
     setKind(a ? a.type : (ctx.kind === 'absence' ? 'DOWNTIME' : 'task'));
     dlg.showModal();
     (ctx.kind === 'task' ? f.title : f.absFrom).focus();
   }
 
+  let earlyOn = false;
+  function setEarly(on, spent) {
+    earlyOn = on;
+    f.earlyField.hidden = !on;
+    f.earlyToggle.classList.toggle('active', on);
+    f.earlyToggle.textContent = on ? '✓ Завершено досрочно — отменить' : '✓ Завершено досрочно';
+    if (on) {
+      if (spent !== undefined) f.spent.value = spent;
+      if (f.spent.value === '') f.spent.value = f.estimate.value;
+      f.spent.focus();
+    }
+    f.overtime.disabled = on;
+    updateSpanHint();
+  }
+  f.earlyToggle.addEventListener('click', () => setEarly(!earlyOn));
+
   function updateSpanHint() {
     const estimate = Number(f.estimate.value) || 0;
-    const overtime = Number(f.overtime.value) || 0;
-    const total = estimate + overtime;
+    const overtime = earlyOn ? 0 : (Number(f.overtime.value) || 0);
+    const norm = ctx ? normFor(ctx.empId) : NORM;
+    const total = earlyOn ? (Number(f.spent.value) || 0) : estimate + overtime;
     const parts = [];
-    if (overtime > 0) parts.push(`оценка ${fmtHours(estimate)} + ${fmtHours(overtime)} сверх = ${fmtHours(total)}`);
     f.spanHint.classList.remove('warn');
-    if (total <= NORM) {
-      f.stretch.disabled = true;
-      f.stretch.checked = false;
-      parts.push(total > 0 ? 'помещается в один день' : 'растянуть можно задачу больше 8 часов');
-    } else {
-      f.stretch.disabled = false;
-      const days = spanDays(total);
+    if (earlyOn) {
+      parts.push(`завершена досрочно: занимает ${fmtHours(total)} вместо ${fmtHours(estimate)}`);
+      if (estimate > total) parts.push(`сэкономлено ${fmtHours(estimate - total)}`);
+    } else if (overtime > 0) {
+      parts.push(`оценка ${fmtHours(estimate)} + ${fmtHours(overtime)} сверх = ${fmtHours(total)}`);
+    }
+    if (norm !== NORM) parts.push(`норма сотрудника ${fmtHours(norm)} в день`);
+    if (total > norm) {
+      const days = spanDays(total, norm);
       const split = [];
-      for (let i = 0; i < days; i++) split.push(fmtHours(i === days - 1 ? total - NORM * i : NORM));
-      if (f.stretch.checked) {
-        parts.push(`${days} раб. дн.: ${split.join(' + ')}`);
-      } else {
-        parts.push(`${fmtHours(total)} в одном дне — перегруз; включите пролонгацию: ${days} раб. дн. (${split.join(' + ')})`);
-        f.spanHint.classList.add('warn');
-      }
+      for (let i = 0; i < days; i++) split.push(fmtHours(i === days - 1 ? total - norm * i : norm));
+      parts.push(`растянется на ${days} раб. дн.: ${split.join(' + ')}`);
+    } else if (total > 0) {
+      parts.push('помещается в один день');
     }
     f.spanHint.textContent = parts.join(' · ');
   }
-  [f.estimate, f.overtime].forEach((el) => el.addEventListener('input', updateSpanHint));
-  f.stretch.addEventListener('change', updateSpanHint);
+  [f.estimate, f.overtime, f.spent].forEach((el) => el.addEventListener('input', updateSpanHint));
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -764,10 +822,12 @@
     const body = {
       title,
       release: f.release.value.trim(),
+      epic: f.epic.value.trim(),
       estimate: f.estimate.value === '' ? null : Number(f.estimate.value),
-      overtime: f.overtime.value === '' ? null : Number(f.overtime.value)
+      overtime: earlyOn || f.overtime.value === '' ? null : Number(f.overtime.value),
+      completedEarly: earlyOn,
+      spent: earlyOn && f.spent.value !== '' ? Number(f.spent.value) : null
     };
-    body.days = f.stretch.checked ? spanDays((body.estimate || 0) + (body.overtime || 0)) : 1;
     let saved;
     if (ctx.task) {
       saved = await api('PUT', `/api/tasks/${ctx.task.id}`, body);
@@ -850,13 +910,20 @@
     openDialog({ kind: 'absence', empId: state.employees[0].id, day: today });
   });
 
-  function refreshReleaseList() {
-    const list = document.getElementById('releaseList');
-    list.replaceChildren(...[...state.releases].sort().map((r) => {
+  function fillDatalist(id, values) {
+    document.getElementById(id).replaceChildren(...[...values].sort((a, b) => a.localeCompare(b, 'ru')).map((v) => {
       const o = document.createElement('option');
-      o.value = r;
+      o.value = v;
       return o;
     }));
+  }
+
+  function refreshReleaseList() {
+    fillDatalist('releaseList', state.releases);
+  }
+
+  function refreshEpicList() {
+    fillDatalist('epicList', state.epics);
   }
 
   /* ---------- Диалог сотрудника ---------- */
@@ -865,7 +932,12 @@
   const employeeDialog = document.getElementById('employeeDialog');
   const employeeForm = document.getElementById('employeeForm');
   const employeeName = document.getElementById('employeeName');
+  const employeeRate = document.getElementById('employeeRate');
   const employeeColor = document.getElementById('employeeColor');
+  employeeRate.addEventListener('input', () => {
+    const r = Number(employeeRate.value) || 0;
+    document.getElementById('rateHint').textContent = r > 0 ? `${r} = ${fmtHours(NORM * r)} в день` : '1 = 8ч в день';
+  });
   const employeeDelete = document.getElementById('employeeDelete');
   const palette = document.getElementById('palette');
   let employeeCtx = null;
@@ -895,6 +967,8 @@
     employeeCtx = emp || null;
     document.getElementById('employeeDialogTitle').textContent = emp ? 'Сотрудник' : 'Новый сотрудник';
     employeeName.value = emp ? emp.name : '';
+    employeeRate.value = emp && emp.rate ? emp.rate : 1;
+    employeeRate.dispatchEvent(new Event('input'));
     employeeColor.value = emp ? emp.color : PALETTE[state.employees.length % PALETTE.length];
     employeeDelete.hidden = !emp;
     markSwatch();
@@ -909,14 +983,16 @@
     e.preventDefault();
     const name = employeeName.value.trim();
     if (!name) { employeeName.focus(); return; }
-    const body = { name, color: employeeColor.value };
+    const body = { name, color: employeeColor.value, rate: Number(employeeRate.value) || 1 };
     try {
       if (employeeCtx) {
+        const rateChanged = Number(employeeCtx.rate || 1) !== body.rate;
         const saved = await api('PUT', `/api/employees/${employeeCtx.id}`, body);
         Object.assign(employeeCtx, saved);
         const row = els.rows.get(saved.id);
         row.replaceChild(makeEmpCell(saved), row.firstElementChild);
-        renderRow(saved.id);
+        // при смене ставки меняется растяжка задач — перечитываем их с сервера
+        if (rateChanged) await reloadTasks(); else renderRow(saved.id);
         toast('Сотрудник обновлён', 'ok');
       } else {
         const saved = await api('POST', '/api/employees', body);

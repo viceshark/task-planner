@@ -31,4 +31,13 @@ public class Employee {
     /** Порядок в списке сотрудников (меняется drag-and-drop'ом). */
     @Column(nullable = false)
     private int position;
+
+    /** Ставка: 1 = полный день (8ч), 0.5 = полдня (4ч). Определяет норму дня и растяжку задач. */
+    @Column(nullable = false)
+    private double rate = 1.0;
+
+    /** Норма рабочего дня в часах с учётом ставки. */
+    public double dayNorm() {
+        return 8.0 * rate;
+    }
 }
