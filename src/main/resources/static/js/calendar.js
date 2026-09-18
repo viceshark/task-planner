@@ -1,5 +1,6 @@
 /* Календарь: бесконечная горизонтальная прокрутка по дням, строки — сотрудники,
-   задачи в ячейках, drag-and-drop задач между днями и сотрудников в списке. */
+   задачи (в т.ч. растянутые на несколько рабочих дней) и события (простой / аренда / отпуск)
+   в ячейках, drag-and-drop задач между днями и сотрудников в списке. */
 (function () {
   'use strict';
 
@@ -17,10 +18,18 @@
   const EDGE = 900;       // за сколько px до края начинать подгрузку
   const NORM = 8;         // норма часов в день
 
+  const ABS = {
+    DOWNTIME: { label: 'Простой', cls: 'abs-downtime', noteLabel: 'Причина', notePlaceholder: 'например, ждём макеты' },
+    RENTAL: { label: 'Аренда', cls: 'abs-rental', noteLabel: 'Кому / куда', notePlaceholder: 'например, команда биллинга' },
+    VACATION: { label: 'Отпуск', cls: 'abs-vacation', noteLabel: 'Комментарий', notePlaceholder: '' }
+  };
+
   const state = {
     employees: [],
     tasks: new Map(),     // id -> task
-    cells: new Map(),     // "empId|day" -> [taskId]
+    cells: new Map(),     // "empId|day" -> [taskId] (растянутая задача лежит в каждом своём дне)
+    absences: new Map(),  // id -> absence
+    absCells: new Map(),  // "empId|day" -> [absenceId]
     start: null,
     end: null,
     jiraBase: '',
@@ -35,15 +44,36 @@
   const cellKey = (empId, day) => empId + '|' + day;
   const today = D.today();
 
+  /* ---------- Задачи: дни и часы ---------- */
+
+  /** Дни задачи: день начала (даже выходной), затем следующие рабочие дни — всего t.days штук. */
+  function taskDays(t) {
+    const out = [t.day];
+    let cur = t.day;
+    while (out.length < Math.max(1, t.days || 1)) {
+      cur = D.addDays(cur, 1);
+      if (!D.isWeekend(cur)) out.push(cur);
+    }
+    return out;
+  }
+
+  const taskTotal = (t) => (Number(t.estimate) || 0) + (Number(t.overtime) || 0);
+  const taskPerDay = (t) => taskTotal(t) / Math.max(1, t.days || 1);
+  const absHours = (a) => (a.hoursPerDay === null || a.hoursPerDay === undefined ? NORM : Number(a.hoursPerDay));
+
   /* ---------- Данные ---------- */
+
+  function pushTo(map, key, id) {
+    if (!map.has(key)) map.set(key, []);
+    const list = map.get(key);
+    if (!list.includes(id)) list.push(id);
+  }
 
   function ingestTasks(list) {
     for (const t of list) {
       if (state.tasks.has(t.id)) continue;
       state.tasks.set(t.id, t);
-      const k = cellKey(t.employeeId, t.day);
-      if (!state.cells.has(k)) state.cells.set(k, []);
-      state.cells.get(k).push(t.id);
+      for (const day of taskDays(t)) pushTo(state.cells, cellKey(t.employeeId, day), t.id);
       if (t.release) state.releases.add(t.release);
     }
   }
@@ -52,12 +82,36 @@
     const t = state.tasks.get(id);
     if (!t) return null;
     state.tasks.delete(id);
-    const list = state.cells.get(cellKey(t.employeeId, t.day));
-    if (list) {
-      const i = list.indexOf(id);
-      if (i >= 0) list.splice(i, 1);
+    for (const day of taskDays(t)) {
+      const list = state.cells.get(cellKey(t.employeeId, day));
+      if (list) {
+        const i = list.indexOf(id);
+        if (i >= 0) list.splice(i, 1);
+      }
     }
     return t;
+  }
+
+  function ingestAbsences(list) {
+    for (const a of list) {
+      if (state.absences.has(a.id)) continue;
+      state.absences.set(a.id, a);
+      for (const day of D.range(a.startDay, a.endDay)) pushTo(state.absCells, cellKey(a.employeeId, day), a.id);
+    }
+  }
+
+  function removeAbsence(id) {
+    const a = state.absences.get(id);
+    if (!a) return null;
+    state.absences.delete(id);
+    for (const day of D.range(a.startDay, a.endDay)) {
+      const list = state.absCells.get(cellKey(a.employeeId, day));
+      if (list) {
+        const i = list.indexOf(id);
+        if (i >= 0) list.splice(i, 1);
+      }
+    }
+    return a;
   }
 
   function cellTasks(empId, day) {
@@ -66,12 +120,20 @@
       .sort((a, b) => a.position - b.position || a.id - b.id);
   }
 
-  function sumFor(empId, day) {
-    return cellTasks(empId, day).reduce((s, t) => s + (Number(t.estimate) || 0), 0);
+  function cellAbsences(empId, day) {
+    const ids = state.absCells.get(cellKey(empId, day)) || [];
+    return ids.map((id) => state.absences.get(id)).filter(Boolean).sort((a, b) => a.id - b.id);
   }
 
   function employeeById(id) {
     return state.employees.find((e) => e.id === id);
+  }
+
+  /** Дни диапазона, ограниченные загруженным периодом. */
+  function loadedRange(from, to) {
+    const a = from < state.start ? state.start : from;
+    const b = to > state.end ? state.end : to;
+    return a <= b ? D.range(a, b) : [];
   }
 
   /* ---------- Рендер ---------- */
@@ -101,9 +163,9 @@
     el.className = dayClasses('day-cell', day);
     el.dataset.emp = emp.id;
     el.dataset.day = day;
-    el.innerHTML = '<div class="tasks"></div>' +
+    el.innerHTML = '<div class="absences"></div><div class="tasks"></div>' +
       '<div class="cell-foot"><span class="sum"></span>' +
-      '<button class="add-btn" type="button" title="Добавить задачу">+</button></div>';
+      '<button class="add-btn" type="button" title="Добавить задачу или событие">+</button></div>';
     els.cells.set(cellKey(emp.id, day), el);
     return el;
   }
@@ -118,11 +180,11 @@
     el.innerHTML = `<span class="grip" aria-hidden="true"></span>` +
       `<span class="dot"></span>` +
       `<span class="emp-name">${escapeHtml(emp.name)}</span>` +
-      `<span class="emp-total" title="Часы за месяц в поле зрения"></span>`;
+      `<span class="emp-total" title="Часы задач за месяц в поле зрения"></span>`;
     return el;
   }
 
-  /** Сумма оценок каждого сотрудника за месяц, который сейчас виден в календаре. */
+  /** Сумма часов задач каждого сотрудника за месяц, который сейчас виден в календаре. */
   let totalsQueued = false;
   function scheduleTotals() {
     if (totalsQueued) return;
@@ -138,7 +200,10 @@
     const sums = new Map();
     if (month) {
       for (const t of state.tasks.values()) {
-        if (t.day.startsWith(month)) sums.set(t.employeeId, (sums.get(t.employeeId) || 0) + (Number(t.estimate) || 0));
+        const perDay = taskPerDay(t);
+        for (const day of taskDays(t)) {
+          if (day.startsWith(month)) sums.set(t.employeeId, (sums.get(t.employeeId) || 0) + perDay);
+        }
       }
     }
     for (const emp of state.employees) {
@@ -169,21 +234,44 @@
     return first.length > 18 ? first.slice(0, 17) + '…' : first;
   }
 
-  function taskCard(t, emp) {
+  function taskCard(t, emp, day) {
+    const days = taskDays(t);
+    const part = days.indexOf(day);
+    const spanned = days.length > 1;
+    const isStart = part <= 0;
     const el = document.createElement('div');
-    el.className = 'task';
-    el.draggable = true;
+    el.className = 'task' + (spanned ? ' task-span' : '') + (spanned && !isStart ? ' task-cont' : '');
+    el.draggable = isStart;
     el.dataset.id = t.id;
     el.style.setProperty('--emp-color', emp ? emp.color : '#00e5ff');
+    if (!isStart) el.title = 'Продолжение задачи, начатой ' + D.long(t.day);
+
     const hasEstimate = t.estimate !== null && t.estimate !== undefined;
+    const hours = spanned ? fmtHours(taskPerDay(t)) : (hasEstimate ? fmtHours(t.estimate) : '');
     const meta = [];
     if (t.release) meta.push(`<span class="badge rel" title="Релиз">${escapeHtml(t.release)}</span>`);
-    if (hasEstimate) meta.push(`<span class="est" title="Оценка">${fmtHours(t.estimate)}</span>`);
+    if (spanned) meta.push(`<span class="badge span" title="Растянута на ${days.length} раб. дн., всего ${fmtHours(taskTotal(t))}">${part + 1}/${days.length}</span>`);
+    if (t.overtime) meta.push(`<span class="badge ot" title="Овертайм">+${fmtHours(t.overtime)}</span>`);
+    if (hours) meta.push(`<span class="est" title="${spanned ? 'Часов в этот день' : 'Оценка'}">${hours}</span>`);
+
     el.innerHTML =
       `<div class="task-head"><span class="task-sq"></span><span class="task-short">${escapeHtml(shortId(t.title))}</span>` +
-      `<span class="task-hours">${hasEstimate ? fmtHours(t.estimate) : ''}</span></div>` +
+      `<span class="task-hours">${hours}</span></div>` +
       `<div class="task-body"><div class="task-title">${linkify(t.title, state.jiraBase)}</div>` +
       (meta.length ? `<div class="task-meta">${meta.join('')}</div>` : '') + '</div>';
+    return el;
+  }
+
+  function absenceChip(a) {
+    const meta = ABS[a.type] || ABS.DOWNTIME;
+    const el = document.createElement('div');
+    el.className = 'absence ' + meta.cls;
+    el.dataset.abs = a.id;
+    const hours = a.type === 'DOWNTIME' && a.hoursPerDay ? ' ' + fmtHours(a.hoursPerDay) : '';
+    const period = a.startDay === a.endDay ? D.long(a.startDay) : `${D.short(a.startDay)} — ${D.short(a.endDay)}`;
+    el.title = `${meta.label}${hours}: ${period}` + (a.note ? ` · ${a.note}` : '');
+    el.innerHTML = `<span class="abs-label">${meta.label}${hours}</span>` +
+      (a.note ? `<span class="abs-note">${escapeHtml(a.note)}</span>` : '');
     return el;
   }
 
@@ -192,10 +280,21 @@
     if (!el) return;
     const emp = employeeById(empId);
     const tasks = cellTasks(empId, day);
-    const list = el.querySelector('.tasks');
-    list.replaceChildren(...tasks.map((t) => taskCard(t, emp)));
+    const absences = cellAbsences(empId, day);
 
-    const sum = tasks.reduce((s, t) => s + (Number(t.estimate) || 0), 0);
+    el.querySelector('.absences').replaceChildren(...absences.map(absenceChip));
+    el.querySelector('.tasks').replaceChildren(...tasks.map((t) => taskCard(t, emp, day)));
+
+    el.classList.remove('abs-downtime', 'abs-rental', 'abs-vacation', 'has-absence');
+    if (absences.length) {
+      el.classList.add('has-absence', (ABS[absences[0].type] || ABS.DOWNTIME).cls);
+    }
+
+    // занятость дня: часы задач + часы событий (отпуск и аренда занимают весь рабочий день)
+    let sum = tasks.reduce((s, t) => s + taskPerDay(t), 0);
+    if (!D.isWeekend(day)) sum += absences.reduce((s, a) => s + absHours(a), 0);
+    sum = Math.round(sum * 100) / 100;
+
     const sumEl = el.querySelector('.sum');
     let cls = 'sum ';
     if (sum === 0) cls += 'zero';
@@ -203,8 +302,8 @@
     else if (sum === NORM) cls += 'ok';
     else cls += 'over';
     sumEl.className = cls;
-    sumEl.textContent = tasks.length ? 'Σ ' + fmtHours(sum) : '';
-    sumEl.title = 'Занятость за день: сумма оценок';
+    sumEl.textContent = tasks.length || absences.length ? 'Σ ' + fmtHours(sum) : '';
+    sumEl.title = 'Занятость за день: задачи и события';
     el.classList.toggle('has-tasks', tasks.length > 0);
     scheduleTotals();
   }
@@ -225,6 +324,16 @@
     for (const day of days) {
       for (const e of state.employees) renderCell(e.id, day);
       updateDayWidth(day);
+    }
+  }
+
+  /** Перерисовать все дни задачи (в пределах загруженного периода). */
+  function renderTaskDays(t) {
+    for (const day of taskDays(t)) {
+      if (day >= state.start && day <= state.end) {
+        renderCell(t.employeeId, day);
+        updateDayWidth(day);
+      }
     }
   }
 
@@ -286,16 +395,24 @@
 
   /* ---------- Бесконечная прокрутка ---------- */
 
+  async function fetchRange(from, to) {
+    const [tasks, absences] = await Promise.all([
+      api('GET', `/api/tasks?from=${from}&to=${to}`),
+      api('GET', `/api/absences?from=${from}&to=${to}`)
+    ]);
+    ingestTasks(tasks);
+    ingestAbsences(absences);
+  }
+
   async function extend(dir) {
     if (state.loading[dir]) return;
     state.loading[dir] = true;
     try {
       const from = dir === 'right' ? D.addDays(state.end, 1) : D.addDays(state.start, -CHUNK);
       const to = dir === 'right' ? D.addDays(state.end, CHUNK) : D.addDays(state.start, -1);
-      const tasks = await api('GET', `/api/tasks?from=${from}&to=${to}`);
+      // данные кладём в состояние до создания колонок, чтобы ширина выходных была верной сразу
+      await fetchRange(from, to);
       const days = D.range(from, to);
-      // задачи кладём в состояние до создания колонок, чтобы ширина выходных была верной сразу
-      ingestTasks(tasks);
       const prevWidth = board.scrollWidth;
 
       if (dir === 'right') {
@@ -375,6 +492,10 @@
     const task = e.target.closest('.task');
     const empCell = e.target.closest('.emp-cell');
     if (task) {
+      if (task.classList.contains('task-cont')) {
+        e.preventDefault();
+        return;
+      }
       state.drag = { type: 'task', id: Number(task.dataset.id) };
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', 'task:' + task.dataset.id);
@@ -437,14 +558,11 @@
   async function moveTask(id, empId, day) {
     const t = state.tasks.get(id);
     if (!t || (t.employeeId === empId && t.day === day)) return;
-    const from = { empId: t.employeeId, day: t.day };
     const saved = await api('PATCH', `/api/tasks/${id}/move`, { employeeId: empId, day });
-    removeTask(id);
+    const old = removeTask(id);
     ingestTasks([saved]);
-    renderCell(from.empId, from.day);
-    renderCell(saved.employeeId, saved.day);
-    updateDayWidth(from.day);
-    updateDayWidth(saved.day);
+    renderTaskDays(old);
+    renderTaskDays(saved);
   }
 
   async function reorderEmployee(dragId, targetId, before) {
@@ -475,13 +593,19 @@
     const addBtn = e.target.closest('.add-btn');
     if (addBtn) {
       const cell = addBtn.closest('.day-cell');
-      openTaskDialog({ empId: Number(cell.dataset.emp), day: cell.dataset.day });
+      openDialog({ kind: 'task', empId: Number(cell.dataset.emp), day: cell.dataset.day });
+      return;
+    }
+    const abs = e.target.closest('.absence');
+    if (abs) {
+      const a = state.absences.get(Number(abs.dataset.abs));
+      if (a) openDialog({ kind: 'absence', empId: a.employeeId, day: a.startDay, absence: a });
       return;
     }
     const task = e.target.closest('.task');
     if (task) {
       const t = state.tasks.get(Number(task.dataset.id));
-      if (t) openTaskDialog({ empId: t.employeeId, day: t.day, task: t });
+      if (t) openDialog({ kind: 'task', empId: t.employeeId, day: t.day, task: t });
       return;
     }
     const empCell = e.target.closest('.emp-cell');
@@ -491,80 +615,223 @@
   });
 
   board.addEventListener('dblclick', (e) => {
-    if (e.target.closest('.task') || e.target.closest('a') || e.target.closest('button')) return;
+    if (e.target.closest('.task') || e.target.closest('.absence') || e.target.closest('a') || e.target.closest('button')) return;
     const cell = e.target.closest('.day-cell');
-    if (cell) openTaskDialog({ empId: Number(cell.dataset.emp), day: cell.dataset.day });
+    if (cell) openDialog({ kind: 'task', empId: Number(cell.dataset.emp), day: cell.dataset.day });
   });
 
-  /* ---------- Диалог задачи ---------- */
+  /* ---------- Диалог задачи / события ---------- */
 
-  const taskDialog = document.getElementById('taskDialog');
-  const taskForm = document.getElementById('taskForm');
-  const taskTitle = document.getElementById('taskTitle');
-  const taskRelease = document.getElementById('taskRelease');
-  const taskEstimate = document.getElementById('taskEstimate');
-  const taskDelete = document.getElementById('taskDelete');
-  let taskCtx = null;
+  const dlg = document.getElementById('taskDialog');
+  const form = document.getElementById('taskForm');
+  const kindSwitch = document.getElementById('kindSwitch');
+  const taskFields = document.getElementById('taskFields');
+  const absenceFields = document.getElementById('absenceFields');
+  const f = {
+    title: document.getElementById('taskTitle'),
+    release: document.getElementById('taskRelease'),
+    estimate: document.getElementById('taskEstimate'),
+    days: document.getElementById('taskDays'),
+    overtime: document.getElementById('taskOvertime'),
+    spanHint: document.getElementById('spanHint'),
+    absEmployee: document.getElementById('absEmployee'),
+    absFrom: document.getElementById('absFrom'),
+    absTo: document.getElementById('absTo'),
+    absHours: document.getElementById('absHours'),
+    absHoursField: document.getElementById('absHoursField'),
+    absNote: document.getElementById('absNote'),
+    absNoteLabel: document.getElementById('absNoteLabel'),
+    absHint: document.getElementById('absHint'),
+    del: document.getElementById('taskDelete'),
+    submit: document.getElementById('taskSubmit')
+  };
+  let ctx = null;   // { kind: 'task' | 'DOWNTIME' | 'RENTAL' | 'VACATION', empId, day, task?, absence? }
 
-  function openTaskDialog(ctx) {
-    taskCtx = ctx;
-    const emp = employeeById(ctx.empId);
-    document.getElementById('taskDialogTitle').textContent = ctx.task ? 'Задача' : 'Новая задача';
-    document.getElementById('taskDialogSub').textContent = `${emp ? emp.name : ''} · ${D.long(ctx.day)}`;
-    taskTitle.value = ctx.task ? ctx.task.title : '';
-    taskRelease.value = ctx.task && ctx.task.release ? ctx.task.release : '';
-    taskEstimate.value = ctx.task && ctx.task.estimate !== null && ctx.task.estimate !== undefined ? ctx.task.estimate : '';
-    taskDelete.hidden = !ctx.task;
-    refreshReleaseList();
-    taskDialog.showModal();
-    taskTitle.focus();
+  function setKind(kind) {
+    ctx.kind = kind;
+    const isTask = kind === 'task';
+    kindSwitch.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.kind === kind));
+    taskFields.hidden = !isTask;
+    absenceFields.hidden = isTask;
+    f.title.required = isTask;
+    if (isTask) {
+      document.getElementById('taskDialogTitle').textContent = ctx.task ? 'Задача' : 'Новая задача';
+      updateSpanHint();
+    } else {
+      const meta = ABS[kind];
+      document.getElementById('taskDialogTitle').textContent = (ctx.absence ? '' : 'Новое событие: ') + meta.label;
+      f.absHoursField.hidden = kind !== 'DOWNTIME';
+      f.absNoteLabel.textContent = meta.noteLabel;
+      f.absNote.placeholder = meta.notePlaceholder;
+      f.absHint.textContent = kind === 'DOWNTIME'
+        ? 'Часы простоя учитываются в занятости дня и в аналитике. Пусто — весь день.'
+        : (kind === 'RENTAL' ? 'Сотрудник занят в другой команде: дни не входят в ёмкость.' : 'Дни отпуска не входят в ёмкость сотрудника.');
+    }
   }
 
-  taskForm.addEventListener('submit', async (e) => {
+  kindSwitch.addEventListener('click', (e) => {
+    const btn = e.target.closest('.seg-btn');
+    if (btn && ctx && !ctx.task && !ctx.absence) setKind(btn.dataset.kind);
+  });
+
+  function fillEmployeeSelect(selectedId) {
+    f.absEmployee.replaceChildren(...state.employees.map((e) => {
+      const o = document.createElement('option');
+      o.value = e.id;
+      o.textContent = e.name;
+      o.selected = e.id === selectedId;
+      return o;
+    }));
+  }
+
+  function openDialog(c) {
+    ctx = { ...c };
+    const emp = employeeById(ctx.empId);
+    const editing = Boolean(ctx.task || ctx.absence);
+    kindSwitch.hidden = editing;
+    document.getElementById('taskDialogSub').textContent = emp && ctx.kind === 'task' ? `${emp.name} · ${D.long(ctx.day)}` : '';
+    f.del.hidden = !editing;
+
+    // задача
+    const t = ctx.task;
+    f.title.value = t ? t.title : '';
+    f.release.value = t && t.release ? t.release : '';
+    f.estimate.value = t && t.estimate !== null && t.estimate !== undefined ? t.estimate : '';
+    f.days.value = t ? (t.days || 1) : 1;
+    f.overtime.value = t && t.overtime ? t.overtime : '';
+
+    // событие
+    const a = ctx.absence;
+    fillEmployeeSelect(a ? a.employeeId : ctx.empId);
+    f.absFrom.value = a ? a.startDay : ctx.day;
+    f.absTo.value = a ? a.endDay : ctx.day;
+    f.absHours.value = a && a.hoursPerDay ? a.hoursPerDay : '';
+    f.absNote.value = a && a.note ? a.note : '';
+
+    refreshReleaseList();
+    setKind(a ? a.type : (ctx.kind === 'absence' ? 'DOWNTIME' : 'task'));
+    dlg.showModal();
+    (ctx.kind === 'task' ? f.title : f.absFrom).focus();
+  }
+
+  function updateSpanHint() {
+    const total = (Number(f.estimate.value) || 0) + (Number(f.overtime.value) || 0);
+    const days = Math.max(1, Number(f.days.value) || 1);
+    f.spanHint.classList.remove('warn');
+    if (days > 1 && total <= NORM) {
+      f.spanHint.textContent = 'Растянуть можно задачу, у которой оценка с овертаймом больше 8 часов.';
+      f.spanHint.classList.add('warn');
+    } else if (days > 1) {
+      f.spanHint.textContent = `${fmtHours(total)} на ${days} раб. дн. — по ${fmtHours(total / days)} в день` +
+        (Number(f.overtime.value) ? `, из них овертайм ${fmtHours(f.overtime.value)}` : '');
+    } else if (total > NORM) {
+      f.spanHint.textContent = `${fmtHours(total)} больше дневной нормы — можно растянуть на ${Math.ceil(total / NORM)} раб. дн.`;
+    } else {
+      f.spanHint.textContent = 'Овертайм — часы сверх нормы, они попадут в аналитику отдельно.';
+    }
+  }
+  [f.estimate, f.days, f.overtime].forEach((el) => el.addEventListener('input', updateSpanHint));
+
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const title = taskTitle.value.trim();
-    if (!title) { taskTitle.focus(); return; }
-    const release = taskRelease.value.trim();
-    const estimate = taskEstimate.value === '' ? null : Number(taskEstimate.value);
-    const submit = document.getElementById('taskSubmit');
-    submit.disabled = true;
+    f.submit.disabled = true;
     try {
-      let saved;
-      if (taskCtx.task) {
-        saved = await api('PUT', `/api/tasks/${taskCtx.task.id}`, { title, release, estimate });
-        removeTask(saved.id);
-      } else {
-        saved = await api('POST', '/api/tasks', { employeeId: taskCtx.empId, day: taskCtx.day, title, release, estimate });
-      }
-      ingestTasks([saved]);
-      renderCell(saved.employeeId, saved.day);
-      updateDayWidth(saved.day);
-      taskDialog.close();
-      toast(taskCtx.task ? 'Задача обновлена' : 'Задача добавлена', 'ok');
+      if (ctx.kind === 'task') await submitTask(); else await submitAbsence();
     } catch (_) { /* ошибка уже показана */ } finally {
-      submit.disabled = false;
+      f.submit.disabled = false;
     }
   });
+
+  async function submitTask() {
+    const title = f.title.value.trim();
+    if (!title) { f.title.focus(); return; }
+    const body = {
+      title,
+      release: f.release.value.trim(),
+      estimate: f.estimate.value === '' ? null : Number(f.estimate.value),
+      days: Math.max(1, Number(f.days.value) || 1),
+      overtime: f.overtime.value === '' ? null : Number(f.overtime.value)
+    };
+    let saved;
+    if (ctx.task) {
+      saved = await api('PUT', `/api/tasks/${ctx.task.id}`, body);
+      const old = removeTask(saved.id);
+      ingestTasks([saved]);
+      renderTaskDays(old);
+    } else {
+      saved = await api('POST', '/api/tasks', { employeeId: ctx.empId, day: ctx.day, ...body });
+      ingestTasks([saved]);
+    }
+    renderTaskDays(saved);
+    dlg.close();
+    toast(ctx.task ? 'Задача обновлена' : 'Задача добавлена', 'ok');
+  }
+
+  async function submitAbsence() {
+    const startDay = f.absFrom.value;
+    const endDay = f.absTo.value;
+    if (!startDay || !endDay) return;
+    if (endDay < startDay) { toast('Дата окончания раньше даты начала', 'error'); return; }
+    const body = {
+      employeeId: Number(f.absEmployee.value),
+      type: ctx.kind,
+      startDay,
+      endDay,
+      hoursPerDay: ctx.kind === 'DOWNTIME' && f.absHours.value !== '' ? Number(f.absHours.value) : null,
+      note: f.absNote.value.trim()
+    };
+    let saved;
+    if (ctx.absence) {
+      saved = await api('PUT', `/api/absences/${ctx.absence.id}`, body);
+      const old = removeAbsence(saved.id);
+      ingestAbsences([saved]);
+      renderAbsenceDays(old);
+    } else {
+      saved = await api('POST', '/api/absences', body);
+      ingestAbsences([saved]);
+    }
+    renderAbsenceDays(saved);
+    dlg.close();
+    toast(ctx.absence ? 'Событие обновлено' : `${ABS[saved.type].label}: добавлено`, 'ok');
+  }
+
+  function renderAbsenceDays(a) {
+    for (const day of loadedRange(a.startDay, a.endDay)) renderCell(a.employeeId, day);
+  }
 
   // Ctrl+Enter в тексте задачи — сохранить
-  taskTitle.addEventListener('keydown', (e) => {
+  f.title.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      taskForm.requestSubmit();
+      form.requestSubmit();
     }
   });
 
-  taskDelete.addEventListener('click', async () => {
-    const t = taskCtx.task;
-    if (!t) return;
-    const ok = await confirmDialog('Удалить задачу?', t.title.split('\n')[0]);
-    if (!ok) return;
-    await api('DELETE', `/api/tasks/${t.id}`);
-    removeTask(t.id);
-    renderCell(t.employeeId, t.day);
-    updateDayWidth(t.day);
-    taskDialog.close();
-    toast('Задача удалена', 'ok');
+  f.del.addEventListener('click', async () => {
+    if (ctx.task) {
+      const t = ctx.task;
+      const ok = await confirmDialog('Удалить задачу?', t.title.split('\n')[0]);
+      if (!ok) return;
+      await api('DELETE', `/api/tasks/${t.id}`);
+      removeTask(t.id);
+      renderTaskDays(t);
+      dlg.close();
+      toast('Задача удалена', 'ok');
+    } else if (ctx.absence) {
+      const a = ctx.absence;
+      const ok = await confirmDialog(`Удалить событие «${ABS[a.type].label}»?`, `${D.long(a.startDay)} — ${D.long(a.endDay)}`);
+      if (!ok) return;
+      await api('DELETE', `/api/absences/${a.id}`);
+      removeAbsence(a.id);
+      renderAbsenceDays(a);
+      dlg.close();
+      toast('Событие удалено', 'ok');
+    }
+  });
+
+  document.getElementById('btnAddAbsence').addEventListener('click', () => {
+    if (!state.employees.length) { toast('Сначала добавьте сотрудника', 'error'); return; }
+    openDialog({ kind: 'absence', empId: state.employees[0].id, day: today });
   });
 
   function refreshReleaseList() {
@@ -652,10 +919,11 @@
     if (!emp) return;
     const count = [...state.tasks.values()].filter((t) => t.employeeId === emp.id).length;
     const ok = await confirmDialog(`Удалить сотрудника ${emp.name}?`,
-      count ? `Вместе с ним будут удалены все его задачи (в загруженном периоде: ${count}).` : 'Действие нельзя отменить.');
+      count ? `Вместе с ним будут удалены все его задачи и события (в загруженном периоде задач: ${count}).` : 'Вместе с ним будут удалены его задачи и события.');
     if (!ok) return;
     await api('DELETE', `/api/employees/${emp.id}`);
     for (const t of [...state.tasks.values()]) if (t.employeeId === emp.id) removeTask(t.id);
+    for (const a of [...state.absences.values()]) if (a.employeeId === emp.id) removeAbsence(a.id);
     els.rows.get(emp.id)?.remove();
     els.rows.delete(emp.id);
     state.employees = state.employees.filter((e) => e.id !== emp.id);
@@ -702,15 +970,14 @@
     state.start = start;
     state.end = D.addDays(start, 7 * 8 - 1);
 
-    const [employees, settings, tasks] = await Promise.all([
+    const [employees, settings] = await Promise.all([
       api('GET', '/api/employees'),
       api('GET', '/api/settings'),
-      api('GET', `/api/tasks?from=${state.start}&to=${state.end}`)
+      fetchRange(state.start, state.end)
     ]);
     state.employees = employees;
     state.jiraBase = settings.jiraBaseUrl || '';
     jiraInput.value = state.jiraBase;
-    ingestTasks(tasks);
     buildBoard();
     refreshReleaseList();
     scrollToToday(false);

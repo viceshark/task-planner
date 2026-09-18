@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     title        TEXT    NOT NULL,
     release_name TEXT,
     estimate     REAL,
-    position     INTEGER NOT NULL DEFAULT 0
+    position     INTEGER NOT NULL DEFAULT 0,
+    days         INTEGER NOT NULL DEFAULT 1,
+    overtime     REAL
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_day ON tasks(day);
@@ -22,3 +24,15 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS absences (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id   INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    type          TEXT    NOT NULL,
+    start_day     TEXT    NOT NULL,
+    end_day       TEXT    NOT NULL,
+    hours_per_day REAL,
+    note          TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_absences_days ON absences(start_day, end_day);

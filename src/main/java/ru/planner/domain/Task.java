@@ -47,4 +47,12 @@ public class Task {
     /** Порядок внутри ячейки (сотрудник + день). */
     @Column(nullable = false)
     private int position;
+
+    /** На сколько рабочих дней растянута задача (пролонгация), начиная с {@link #day}. */
+    @Column(nullable = false)
+    private int days = 1;
+
+    /** Овертайм в часах — работа сверх нормы, учитывается в аналитике отдельно. */
+    @Column
+    private Double overtime;
 }

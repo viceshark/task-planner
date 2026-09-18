@@ -24,6 +24,7 @@
                 <span>Jira</span>
                 <input id="jiraBase" type="url" placeholder="https://jira.example.com" spellcheck="false">
             </label>
+            <button id="btnAddAbsence" class="btn" type="button" title="Простой, аренда или отпуск">+ Событие</button>
             <button id="btnAddEmployee" class="btn btn-primary" type="button">+ Сотрудник</button>
         </div>
     </section>
@@ -48,33 +49,84 @@
         <span class="item"><i class="sw sw-over"></i>больше 8ч</span>
         <span class="item"><i class="sw sw-weekend"></i>выходной</span>
         <span class="item"><i class="sw sw-today"></i>сегодня</span>
+        <span class="item"><i class="sw sw-downtime"></i>простой</span>
+        <span class="item"><i class="sw sw-rental"></i>аренда</span>
+        <span class="item"><i class="sw sw-vacation"></i>отпуск</span>
         <span class="item hint">Задачи и сотрудников можно перетаскивать · клик по задаче — редактирование</span>
     </div>
 </main>
 
-<!-- Диалог задачи: создание и редактирование -->
+<!-- Диалог задачи / события: создание и редактирование -->
 <dialog id="taskDialog" class="modal glass">
     <form id="taskForm" method="dialog" class="modal-form">
         <div class="modal-head">
             <h2 id="taskDialogTitle">Новая задача</h2>
             <span class="modal-sub" id="taskDialogSub"></span>
         </div>
-        <label class="field">
-            <span>Задача</span>
-            <textarea id="taskTitle" rows="3" maxlength="2000" placeholder="PROJ-123&#10;или описание задачи" required></textarea>
-            <small class="field-hint">Jira-ключи (PROJ-123) и ссылки станут кликабельными</small>
-        </label>
-        <div class="field-row">
-            <label class="field">
-                <span>Релиз</span>
-                <input id="taskRelease" type="text" maxlength="100" list="releaseList" placeholder="например, 2.14">
-                <datalist id="releaseList"></datalist>
-            </label>
-            <label class="field">
-                <span>Оценка, ч</span>
-                <input id="taskEstimate" type="number" min="0" max="24" step="0.5" placeholder="8">
-            </label>
+
+        <div class="seg kind-switch" id="kindSwitch" role="group" aria-label="Тип записи">
+            <button type="button" class="seg-btn active" data-kind="task">Задача</button>
+            <button type="button" class="seg-btn" data-kind="DOWNTIME">Простой</button>
+            <button type="button" class="seg-btn" data-kind="RENTAL">Аренда</button>
+            <button type="button" class="seg-btn" data-kind="VACATION">Отпуск</button>
         </div>
+
+        <div id="taskFields" class="fields-block">
+            <label class="field">
+                <span>Задача</span>
+                <textarea id="taskTitle" rows="3" maxlength="2000" placeholder="PROJ-123&#10;или описание задачи"></textarea>
+                <small class="field-hint">Jira-ключи (PROJ-123) и ссылки станут кликабельными</small>
+            </label>
+            <div class="field-row">
+                <label class="field">
+                    <span>Релиз</span>
+                    <input id="taskRelease" type="text" maxlength="100" list="releaseList" placeholder="например, 2.14">
+                    <datalist id="releaseList"></datalist>
+                </label>
+                <label class="field">
+                    <span>Оценка, ч</span>
+                    <input id="taskEstimate" type="number" min="0" max="720" step="0.5" placeholder="8">
+                </label>
+            </div>
+            <div class="field-row">
+                <label class="field">
+                    <span>Растянуть, раб. дней</span>
+                    <input id="taskDays" type="number" min="1" max="30" step="1" value="1">
+                </label>
+                <label class="field">
+                    <span>Овертайм, ч</span>
+                    <input id="taskOvertime" type="number" min="0" max="240" step="0.5" placeholder="0">
+                </label>
+            </div>
+            <small class="field-hint span-hint" id="spanHint"></small>
+        </div>
+
+        <div id="absenceFields" class="fields-block" hidden>
+            <label class="field">
+                <span>Сотрудник</span>
+                <select id="absEmployee"></select>
+            </label>
+            <div class="field-row">
+                <label class="field">
+                    <span>С</span>
+                    <input id="absFrom" type="date" required>
+                </label>
+                <label class="field">
+                    <span>По</span>
+                    <input id="absTo" type="date" required>
+                </label>
+                <label class="field" id="absHoursField">
+                    <span>Часов в день</span>
+                    <input id="absHours" type="number" min="0.5" max="24" step="0.5" placeholder="8">
+                </label>
+            </div>
+            <label class="field">
+                <span id="absNoteLabel">Комментарий</span>
+                <input id="absNote" type="text" maxlength="500" placeholder="">
+            </label>
+            <small class="field-hint" id="absHint"></small>
+        </div>
+
         <div class="modal-actions">
             <button type="button" class="btn btn-danger" id="taskDelete" hidden>Удалить</button>
             <span class="spacer"></span>

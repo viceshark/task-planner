@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.planner.api.dto.EmployeeDto;
 import ru.planner.api.dto.EmployeeRequest;
 import ru.planner.domain.Employee;
+import ru.planner.repo.AbsenceRepository;
 import ru.planner.repo.EmployeeRepository;
 import ru.planner.repo.TaskRepository;
 
@@ -21,6 +22,7 @@ public class EmployeeService {
 
     private final EmployeeRepository employees;
     private final TaskRepository tasks;
+    private final AbsenceRepository absences;
 
     @Transactional(readOnly = true)
     public List<EmployeeDto> list() {
@@ -44,11 +46,12 @@ public class EmployeeService {
         return EmployeeDto.from(employees.save(e));
     }
 
-    /** Удаляет сотрудника вместе со всеми его задачами. */
+    /** Удаляет сотрудника вместе со всеми его задачами и событиями. */
     @Transactional
     public void delete(Long id) {
         Employee e = get(id);
         tasks.deleteByEmployeeId(e.getId());
+        absences.deleteByEmployeeId(e.getId());
         employees.delete(e);
     }
 

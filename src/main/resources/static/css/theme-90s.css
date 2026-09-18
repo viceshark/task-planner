@@ -719,6 +719,58 @@ html[data-theme="90s"] .pill.ok { background: var(--ok90); }
 html[data-theme="90s"] .pill.under { background: var(--under90); }
 html[data-theme="90s"] .pill.over { background: var(--over90); }
 
+/* ---------- События и растянутые задачи ---------- */
+
+html[data-theme="90s"] .absences { padding: 6px 6px 0; gap: 4px; }
+
+html[data-theme="90s"] .absence {
+  padding: 4px 7px;
+  border: 1px solid #000;
+  border-radius: 0;
+  color: #000;
+  font: 400 10px/1.35 Verdana, Geneva, sans-serif;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+  transition: none;
+}
+
+html[data-theme="90s"] .absence:hover { box-shadow: 2px 2px 0 #000; }
+html[data-theme="90s"] .abs-label { font: 700 9px/1.4 'Space Mono', monospace; letter-spacing: 0.06em; }
+html[data-theme="90s"] .abs-note { color: var(--ink2); font-size: 9.5px; }
+
+html[data-theme="90s"] .absence.abs-downtime { background: repeating-linear-gradient(45deg, #e3e0d4 0 3px, #f3f1ea 3px 6px); }
+html[data-theme="90s"] .absence.abs-rental { background: #f5c9a3; }
+html[data-theme="90s"] .absence.abs-vacation { background: #c7dff0; }
+
+html[data-theme="90s"] .day-cell.abs-downtime { background: repeating-linear-gradient(45deg, #f4f2ec 0 4px, #fff 4px 8px); }
+html[data-theme="90s"] .day-cell.abs-rental { background: #fbf1e8; }
+html[data-theme="90s"] .day-cell.abs-vacation { background: #eef5fa; }
+html[data-theme="90s"] .day-cell.weekend.abs-downtime,
+html[data-theme="90s"] .day-cell.weekend.abs-rental,
+html[data-theme="90s"] .day-cell.weekend.abs-vacation { background: var(--hatch); }
+
+html[data-theme="90s"] .task-cont { opacity: 1; border-style: dashed; box-shadow: none; }
+html[data-theme="90s"] .task-cont .task-head { border-bottom-style: dashed; }
+
+html[data-theme="90s"] .badge.span,
+html[data-theme="90s"] .badge.ot {
+  padding: 1px 7px;
+  border: 1px solid #000;
+  border-radius: 0;
+  color: #000;
+  font: 700 9px/1.5 'Space Mono', monospace;
+  text-shadow: none;
+}
+
+html[data-theme="90s"] .badge.span { background: #fff; }
+html[data-theme="90s"] .badge.ot { background: var(--over90); }
+
+html[data-theme="90s"] .sw-downtime { background: repeating-linear-gradient(45deg, #8d8b80 0 2px, #f3f1ea 2px 4px); box-shadow: none; }
+html[data-theme="90s"] .sw-rental { background: #f5c9a3; box-shadow: none; }
+html[data-theme="90s"] .sw-vacation { background: #c7dff0; box-shadow: none; }
+
+html[data-theme="90s"] .span-hint.warn { color: #8a1c1c; }
+html[data-theme="90s"] select { background-image: linear-gradient(45deg, transparent 50%, #000 50%), linear-gradient(135deg, #000 50%, transparent 50%); }
+
 @media (max-width: 900px) {
   html[data-theme="90s"] .topbar { margin: 0 8px; }
   html[data-theme="90s"] .page { margin: 0 8px; }

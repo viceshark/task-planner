@@ -1,4 +1,4 @@
-/* Страница аналитики: KPI, графики Chart.js и сводная таблица за выбранный период. */
+/* Страница аналитики: KPI, графики Chart.js и сводные таблицы за выбранный период. */
 (function () {
   'use strict';
 
@@ -23,6 +23,8 @@
       tooltipText: '#ece9ff',
       norm: '#ff3864',
       ok: '#39ff14', under: '#ffd166', over: '#ff3864',
+      downtime: 'rgba(214, 217, 255, 0.35)', downtimeBorder: 'rgba(214, 217, 255, 0.8)',
+      rental: '#ff6a00', vacation: '#7df9ff', overtime: '#ff3864',
       radarFill: 'rgba(0, 229, 255, 0.18)', radarLine: '#00e5ff', radarPoint: '#ff2fd6',
       capacityFill: 'rgba(255,255,255,0.05)', capacityBorder: 'rgba(255,255,255,0.35)',
       fillAlpha: 0.55, borderRadius: 6
@@ -38,6 +40,8 @@
       tooltipText: '#000',
       norm: '#000',
       ok: '#8fd08f', under: '#e8d27a', over: '#e08f8f',
+      downtime: '#e3e0d4', downtimeBorder: '#000',
+      rental: '#f5c9a3', vacation: '#c7dff0', overtime: '#e08f8f',
       radarFill: 'rgba(168, 216, 224, 0.5)', radarLine: '#000', radarPoint: '#7a0f6e',
       capacityFill: 'rgba(0,0,0,0.04)', capacityBorder: '#3a3a35',
       fillAlpha: 1, borderRadius: 0
@@ -70,6 +74,7 @@
   /** Цвет обводки: в 90s всё обводится чёрным. */
   const stroke = (hex) => (is90s() ? '#000' : hex);
   const seriesColor = (i) => palette().series[i % palette().series.length];
+  const solid = (hex, alpha) => (is90s() ? hex : hexToRgba(hex, alpha));
 
   function applyChartDefaults() {
     const p = palette();
@@ -113,6 +118,13 @@
     grid: { color: palette().grid },
     border: { color: palette().border },
     ticks: { color: palette().text },
+    ...extra
+  });
+
+  const barOpts = (extra = {}) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: { x: axis({ grid: { display: false } }), y: axis({ beginAtZero: true }) },
     ...extra
   });
 
@@ -174,13 +186,26 @@
   function render(data) {
     renderKpis(data);
     renderDaily(data);
+    renderReleaseTable(data);
     renderEmployees(data);
     renderUtil(data);
+    renderOvertime(data);
+    renderAbsences(data);
     renderReleases(data);
     renderWeekdays(data);
-    renderTop(data);
     renderTable(data);
   }
+
+  const plural = (n, one, few, many) => {
+    const a = Math.abs(n) % 100;
+    const b = a % 10;
+    if (a > 10 && a < 20) return many;
+    if (b > 1 && b < 5) return few;
+    if (b === 1) return one;
+    return many;
+  };
+  const daysWord = (n) => `${n} ${plural(n, 'день', 'дня', 'дней')}`;
+  const utilClass = (u) => (u > 100 ? 'over' : u >= 80 ? 'ok' : 'under');
 
   function renderKpis(data) {
     const t = data.totals;
@@ -188,11 +213,18 @@
     document.getElementById('kpiCapacity').textContent = `ёмкость команды ${fmtHours(t.capacity)}`;
     const util = document.getElementById('kpiUtil');
     util.textContent = t.utilization + '%';
-    util.className = 'kpi-value ' + (t.utilization > 100 ? 'over' : t.utilization >= 80 ? 'ok' : 'under');
+    util.className = 'kpi-value ' + utilClass(t.utilization);
     document.getElementById('kpiTasks').textContent = t.tasks;
-    document.getElementById('kpiTasksSub').textContent = `у ${t.employees} сотрудников`;
-    document.getElementById('kpiReleases').textContent = t.releases;
-    document.getElementById('kpiAvg').textContent = `в среднем ${fmtHours(t.avgPerWorkday)} на человека в день`;
+    document.getElementById('kpiTasksSub').textContent = `у ${t.employees} сотрудников · релизов: ${t.releases}`;
+    const ot = document.getElementById('kpiOvertime');
+    ot.textContent = fmtHours(t.overtime);
+    ot.className = 'kpi-value' + (t.overtime > 0 ? ' over' : '');
+    document.getElementById('kpiOvertimeSub').textContent = t.overtime > 0
+      ? `у ${t.overtimeEmployees} ${plural(t.overtimeEmployees, 'сотрудника', 'сотрудников', 'сотрудников')}` : 'сверх нормы не запланировано';
+    document.getElementById('kpiDowntime').textContent = fmtHours(t.downtimeHours);
+    document.getElementById('kpiDowntimeSub').textContent = t.downtimeDays ? `${daysWord(t.downtimeDays)} с простоем` : 'простоев нет';
+    document.getElementById('kpiAway').textContent = daysWord(t.vacationDays + t.rentalDays);
+    document.getElementById('kpiAwaySub').textContent = `отпуск ${daysWord(t.vacationDays)} · аренда ${daysWord(t.rentalDays)}`;
   }
 
   function renderDaily(data) {
@@ -211,11 +243,20 @@
         stack: 'hours'
       };
     });
-    const norm = data.daily.length * 8;
+    datasets.push({
+      label: 'Простой',
+      data: data.dailyDowntime,
+      backgroundColor: p.downtime,
+      borderColor: p.downtimeBorder,
+      borderWidth: 1,
+      borderDash: [3, 2],
+      borderRadius: 0,
+      stack: 'hours'
+    });
     datasets.push({
       type: 'line',
-      label: 'Норма команды',
-      data: data.days.map((d) => (D.isWeekend(d) ? null : norm)),
+      label: 'Ёмкость команды',
+      data: data.dailyCapacity.map((v, i) => (D.isWeekend(data.days[i]) ? null : v)),
       borderColor: p.norm,
       borderDash: [6, 4],
       borderWidth: 1.5,
@@ -236,9 +277,10 @@
         },
         plugins: {
           tooltip: {
+            filter: (item) => item.raw !== null && item.raw !== 0,
             callbacks: {
               title: (items) => items.length ? D.long(data.days[items[0].dataIndex]) : '',
-              label: (item) => item.raw === null ? null : ` ${item.dataset.label}: ${fmtHours(item.raw)}`
+              label: (item) => ` ${item.dataset.label}: ${fmtHours(item.raw)}`
             }
           }
         }
@@ -246,14 +288,29 @@
     });
   }
 
+  function renderReleaseTable(data) {
+    const tbody = document.querySelector('#releaseTable tbody');
+    const todayIso = D.today();
+    tbody.innerHTML = data.releases.map((r) => {
+      const ready = r.readyDay ? D.long(r.readyDay) : '—';
+      const cls = r.readyDay && r.readyDay < todayIso ? 'ok' : (r.readyDay ? 'under' : '');
+      return `<tr>
+        <td><b>${escapeHtml(r.release)}</b></td>
+        <td class="num">${r.tasks}</td>
+        <td class="num">${fmtHours(r.hours)}</td>
+        <td>${r.lastTaskDay ? D.long(r.lastTaskDay) : '—'}</td>
+        <td>${r.readyDay ? `<span class="pill ${cls}">${ready}</span>` : '—'}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="5" class="muted">Нет задач за период</td></tr>';
+  }
+
   function renderEmployees(data) {
     destroy('employees');
     const p = palette();
-    const labels = data.employees.map((e) => e.name);
     charts.employees = new Chart(document.getElementById('chartEmployees'), {
       type: 'bar',
       data: {
-        labels,
+        labels: data.employees.map((e) => e.name),
         datasets: [
           {
             label: 'Часы',
@@ -274,12 +331,7 @@
           }
         ]
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: { x: axis({ grid: { display: false } }), y: axis({ beginAtZero: true }) },
-        plugins: { tooltip: { callbacks: { label: (i) => ` ${i.dataset.label}: ${fmtHours(i.raw)}` } } }
-      }
+      options: barOpts({ plugins: { tooltip: { callbacks: { label: (i) => ` ${i.dataset.label}: ${fmtHours(i.raw)}` } } } })
     });
   }
 
@@ -294,7 +346,7 @@
         datasets: [{
           label: 'Загрузка, %',
           data: data.employees.map((e) => e.utilization),
-          backgroundColor: data.employees.map((e) => (is90s() ? colorFor(e.utilization) : hexToRgba(colorFor(e.utilization), 0.5))),
+          backgroundColor: data.employees.map((e) => solid(colorFor(e.utilization), 0.5)),
           borderColor: data.employees.map((e) => stroke(colorFor(e.utilization))),
           borderWidth: 1.5,
           borderRadius: p.borderRadius
@@ -316,6 +368,61 @@
     });
   }
 
+  function renderOvertime(data) {
+    destroy('overtime');
+    const p = palette();
+    charts.overtime = new Chart(document.getElementById('chartOvertime'), {
+      type: 'bar',
+      data: {
+        labels: data.employees.map((e) => e.name),
+        datasets: [{
+          label: 'Овертайм, ч',
+          data: data.employees.map((e) => e.overtime),
+          backgroundColor: solid(p.overtime, 0.5),
+          borderColor: stroke(p.overtime),
+          borderWidth: 1.5,
+          borderRadius: p.borderRadius
+        }]
+      },
+      options: barOpts({
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (i) => ` ${fmtHours(i.raw)}` } } }
+      })
+    });
+    if (!data.employees.some((e) => e.overtime > 0)) emptyNote('chartOvertime', 'Овертаймов за период нет');
+  }
+
+  function renderAbsences(data) {
+    destroy('absences');
+    const p = palette();
+    const mk = (label, key, color, border) => ({
+      label,
+      data: data.employees.map((e) => (key === 'downtimeHours' ? e[key] : e[key] * 8)),
+      backgroundColor: color,
+      borderColor: border,
+      borderWidth: 1,
+      borderRadius: 0,
+      stack: 'abs'
+    });
+    charts.absences = new Chart(document.getElementById('chartAbsences'), {
+      type: 'bar',
+      data: {
+        labels: data.employees.map((e) => e.name),
+        datasets: [
+          mk('Простой', 'downtimeHours', p.downtime, p.downtimeBorder),
+          mk('Отпуск', 'vacationDays', solid(p.vacation, 0.5), stroke(p.vacation)),
+          mk('Аренда', 'rentalDays', solid(p.rental, 0.5), stroke(p.rental))
+        ]
+      },
+      options: barOpts({
+        scales: { x: axis({ stacked: true, grid: { display: false } }), y: axis({ stacked: true, beginAtZero: true }) },
+        plugins: { tooltip: { filter: (i) => i.raw !== 0, callbacks: { label: (i) => ` ${i.dataset.label}: ${fmtHours(i.raw)}` } } }
+      })
+    });
+    if (!data.employees.some((e) => e.downtimeHours > 0 || e.vacationDays > 0 || e.rentalDays > 0)) {
+      emptyNote('chartAbsences', 'Событий за период нет');
+    }
+  }
+
   function renderReleases(data) {
     destroy('releases');
     const items = data.releases;
@@ -325,7 +432,7 @@
         labels: items.map((r) => r.release),
         datasets: [{
           data: items.map((r) => r.hours),
-          backgroundColor: items.map((_, i) => (is90s() ? seriesColor(i) : hexToRgba(seriesColor(i), 0.6))),
+          backgroundColor: items.map((_, i) => solid(seriesColor(i), 0.6)),
           borderColor: items.map((_, i) => stroke(seriesColor(i))),
           borderWidth: 1.5,
           hoverOffset: 8
@@ -346,6 +453,7 @@
 
   function renderWeekdays(data) {
     destroy('weekdays');
+    const p = palette();
     charts.weekdays = new Chart(document.getElementById('chartWeekdays'), {
       type: 'radar',
       data: {
@@ -353,10 +461,10 @@
         datasets: [{
           label: 'Средняя нагрузка команды, ч',
           data: data.weekdays.map((w) => w.avg),
-          backgroundColor: palette().radarFill,
-          borderColor: palette().radarLine,
-          pointBackgroundColor: palette().radarPoint,
-          pointBorderColor: palette().radarPoint,
+          backgroundColor: p.radarFill,
+          borderColor: p.radarLine,
+          pointBackgroundColor: p.radarPoint,
+          pointBorderColor: p.radarPoint,
           borderWidth: 2
         }]
       },
@@ -366,45 +474,15 @@
         scales: {
           r: {
             beginAtZero: true,
-            grid: { color: palette().grid },
-            angleLines: { color: palette().grid },
-            pointLabels: { color: palette().text, font: palette().font },
-            ticks: { color: palette().text, backdropColor: 'transparent', showLabelBackdrop: false }
+            grid: { color: p.grid },
+            angleLines: { color: p.grid },
+            pointLabels: { color: p.text, font: p.font },
+            ticks: { color: p.text, backdropColor: 'transparent', showLabelBackdrop: false }
           }
         },
         plugins: { tooltip: { callbacks: { label: (i) => ` ${fmtHours(i.raw)} в среднем, всего ${fmtHours(data.weekdays[i.dataIndex].hours)}` } } }
       }
     });
-  }
-
-  function renderTop(data) {
-    destroy('top');
-    const items = data.topTasks;
-    charts.top = new Chart(document.getElementById('chartTop'), {
-      type: 'bar',
-      data: {
-        labels: items.map((t) => (t.title.length > 28 ? t.title.slice(0, 27) + '…' : t.title)),
-        datasets: [{
-          label: 'Часы',
-          data: items.map((t) => t.hours),
-          backgroundColor: items.map((_, i) => (is90s() ? seriesColor(i + 1) : hexToRgba(seriesColor(i + 1), 0.5))),
-          borderColor: items.map((_, i) => stroke(seriesColor(i + 1))),
-          borderWidth: 1.5,
-          borderRadius: palette().borderRadius
-        }]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: { x: axis({ beginAtZero: true }), y: axis({ grid: { display: false } }) },
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { title: (i) => items[i[0].dataIndex].title, label: (i) => ` ${fmtHours(i.raw)} · записей: ${items[i.dataIndex].count}` } }
-        }
-      }
-    });
-    if (!items.length) emptyNote('chartTop', 'Нет задач за период');
   }
 
   function emptyNote(canvasId, text) {
@@ -421,19 +499,20 @@
 
   function renderTable(data) {
     const tbody = document.querySelector('#employeeTable tbody');
-    tbody.innerHTML = data.employees.map((e) => {
-      const cls = e.utilization > 100 ? 'over' : e.utilization >= 80 ? 'ok' : 'under';
-      return `<tr>
+    tbody.innerHTML = data.employees.map((e) => `<tr>
         <td><span class="dot" style="background:${escapeHtml(is90s() ? mixWithWhite(e.color, 0.45) : e.color)};box-shadow:0 0 8px ${escapeHtml(e.color)}"></span>${escapeHtml(e.name)}</td>
         <td class="num">${fmtHours(e.hours)}</td>
         <td class="num">${fmtHours(e.capacity)}</td>
-        <td class="num"><span class="pill ${cls}">${e.utilization}%</span></td>
+        <td class="num"><span class="pill ${utilClass(e.utilization)}">${e.utilization}%</span></td>
         <td class="num">${e.tasks}</td>
+        <td class="num">${e.overtime ? `<span class="pill over">${fmtHours(e.overtime)}</span>` : '—'}</td>
+        <td class="num">${e.downtimeHours ? fmtHours(e.downtimeHours) : '—'}</td>
+        <td class="num">${e.vacationDays ? daysWord(e.vacationDays) : '—'}</td>
+        <td class="num">${e.rentalDays ? daysWord(e.rentalDays) : '—'}</td>
         <td class="num">${e.overloadedDays}</td>
         <td class="num">${e.idleWorkdays}</td>
         <td class="num">${fmtHours(e.maxDayHours)}</td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="8" class="muted">Нет сотрудников</td></tr>';
+      </tr>`).join('') || '<tr><td colspan="12" class="muted">Нет сотрудников</td></tr>';
   }
 
   const [from, to] = presetRange('month');

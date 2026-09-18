@@ -19,6 +19,8 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     @Query("select distinct t.release from Task t where t.release is not null and t.release <> '' order by t.release")
     List<String> findDistinctReleases();
 
+    List<Task> findByReleaseIsNotNull();
+
     @Modifying
     @Query("delete from Task t where t.employeeId = :employeeId")
     void deleteByEmployeeId(@Param("employeeId") Long employeeId);
