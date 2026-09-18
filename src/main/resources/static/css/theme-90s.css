@@ -769,6 +769,8 @@ html[data-theme="90s"] .sw-rental { background: #f5c9a3; box-shadow: none; }
 html[data-theme="90s"] .sw-vacation { background: #c7dff0; box-shadow: none; }
 
 html[data-theme="90s"] .span-hint.warn { color: #8a1c1c; }
+html[data-theme="90s"] .check-field .check { font: 400 10.5px/1.4 Verdana, Geneva, sans-serif; padding: 5px 0; }
+html[data-theme="90s"] .check-field input[type="checkbox"] { accent-color: #000; }
 html[data-theme="90s"] select { background-image: linear-gradient(45deg, transparent 50%, #000 50%), linear-gradient(135deg, #000 50%, transparent 50%); }
 
 @media (max-width: 900px) {

@@ -17,14 +17,16 @@ public record AnalyticsDto(
     List<ReleaseStat> releases,
     List<WeekdayStat> weekdays) {
 
+    /** overtime — часы сверх оценки (задачи, не уложившиеся в оценку); простой в рабочее время не входит. */
     public record Totals(int tasks, double hours, int employees, int releases, double capacity, double utilization,
-                         double overtime, int overtimeEmployees, double downtimeHours, int downtimeDays,
-                         int vacationDays, int rentalDays) {
+                         double overtime, int overtimeTasks, int overtimeEmployees, double downtimeHours,
+                         int downtimeDays, int vacationDays, int rentalDays) {
     }
 
     public record EmployeeStat(Long id, String name, String color, double hours, int tasks, double capacity,
                                double utilization, int overloadedDays, int idleWorkdays, double maxDayHours,
-                               double overtime, double downtimeHours, int vacationDays, int rentalDays) {
+                               double overtime, int overtimeTasks, double downtimeHours, int vacationDays,
+                               int rentalDays) {
     }
 
     /** Ряд для графика по дням: значения соответствуют списку {@link AnalyticsDto#days()}. */

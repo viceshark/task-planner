@@ -30,14 +30,14 @@
         <div class="glass kpi"><span class="kpi-label">Часов запланировано</span><b class="kpi-value" id="kpiHours">—</b><span class="kpi-sub" id="kpiCapacity"></span></div>
         <div class="glass kpi"><span class="kpi-label">Загрузка команды</span><b class="kpi-value" id="kpiUtil">—</b><span class="kpi-sub">от ёмкости с учётом отпусков и аренды</span></div>
         <div class="glass kpi"><span class="kpi-label">Задач</span><b class="kpi-value" id="kpiTasks">—</b><span class="kpi-sub" id="kpiTasksSub"></span></div>
-        <div class="glass kpi"><span class="kpi-label">Овертайм</span><b class="kpi-value" id="kpiOvertime">—</b><span class="kpi-sub" id="kpiOvertimeSub"></span></div>
+        <div class="glass kpi"><span class="kpi-label">Сверх оценки</span><b class="kpi-value" id="kpiOvertime">—</b><span class="kpi-sub" id="kpiOvertimeSub"></span></div>
         <div class="glass kpi"><span class="kpi-label">Простой</span><b class="kpi-value" id="kpiDowntime">—</b><span class="kpi-sub" id="kpiDowntimeSub"></span></div>
         <div class="glass kpi"><span class="kpi-label">Отпуск и аренда</span><b class="kpi-value" id="kpiAway">—</b><span class="kpi-sub" id="kpiAwaySub"></span></div>
     </section>
 
     <section class="charts">
         <div class="glass card card-wide">
-            <div class="card-head"><h2>Загрузка по дням</h2><span class="card-sub">часы задач по сотрудникам и простой; пунктир — ёмкость команды на день</span></div>
+            <div class="card-head"><h2>Загрузка по дням</h2><span class="card-sub">часы задач по сотрудникам; пунктир — ёмкость команды на день (без отпусков и аренды)</span></div>
             <div class="chart-box tall"><canvas id="chartDaily"></canvas></div>
         </div>
         <div class="glass card card-wide">
@@ -66,11 +66,15 @@
             <div class="chart-box"><canvas id="chartUtil"></canvas></div>
         </div>
         <div class="glass card">
-            <div class="card-head"><h2>Овертайм</h2><span class="card-sub">часы сверх нормы по сотрудникам</span></div>
+            <div class="card-head"><h2>Сверх оценки</h2><span class="card-sub">часы, которые ушли поверх оценки, по сотрудникам</span></div>
             <div class="chart-box"><canvas id="chartOvertime"></canvas></div>
         </div>
         <div class="glass card">
-            <div class="card-head"><h2>Простой, отпуск, аренда</h2><span class="card-sub">часы по сотрудникам (день = 8ч)</span></div>
+            <div class="card-head"><h2>Простой</h2><span class="card-sub">часы простоя по сотрудникам — в рабочее время не входят</span></div>
+            <div class="chart-box"><canvas id="chartDowntime"></canvas></div>
+        </div>
+        <div class="glass card">
+            <div class="card-head"><h2>Отпуск и аренда</h2><span class="card-sub">рабочие дни вне команды, по сотрудникам</span></div>
             <div class="chart-box"><canvas id="chartAbsences"></canvas></div>
         </div>
         <div class="glass card">
@@ -92,7 +96,7 @@
                         <th class="num">Ёмкость</th>
                         <th class="num">Загрузка</th>
                         <th class="num">Задач</th>
-                        <th class="num">Овертайм</th>
+                        <th class="num">Сверх оценки</th>
                         <th class="num">Простой</th>
                         <th class="num">Отпуск</th>
                         <th class="num">Аренда</th>

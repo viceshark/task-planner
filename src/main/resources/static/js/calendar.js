@@ -58,8 +58,16 @@
   }
 
   const taskTotal = (t) => (Number(t.estimate) || 0) + (Number(t.overtime) || 0);
-  const taskPerDay = (t) => taskTotal(t) / Math.max(1, t.days || 1);
-  const absHours = (a) => (a.hoursPerDay === null || a.hoursPerDay === undefined ? NORM : Number(a.hoursPerDay));
+  /** Сколько рабочих дней займёт задача при растяжке: по 8ч в день, остаток на последний. */
+  const spanDays = (total) => Math.max(1, Math.min(30, Math.ceil(total / NORM - 1e-9)));
+  /** Часы задачи в её день с индексом idx: 12ч → 8 + 4. */
+  function taskHoursOn(t, idx) {
+    const total = taskTotal(t);
+    const days = Math.max(1, t.days || 1);
+    if (idx < 0 || idx >= days) return 0;
+    if (idx === days - 1) return Math.max(0, total - NORM * idx);
+    return Math.max(0, Math.min(NORM, total - NORM * idx));
+  }
 
   /* ---------- Данные ---------- */
 
@@ -200,10 +208,9 @@
     const sums = new Map();
     if (month) {
       for (const t of state.tasks.values()) {
-        const perDay = taskPerDay(t);
-        for (const day of taskDays(t)) {
-          if (day.startsWith(month)) sums.set(t.employeeId, (sums.get(t.employeeId) || 0) + perDay);
-        }
+        taskDays(t).forEach((day, i) => {
+          if (day.startsWith(month)) sums.set(t.employeeId, (sums.get(t.employeeId) || 0) + taskHoursOn(t, i));
+        });
       }
     }
     for (const emp of state.employees) {
@@ -247,12 +254,12 @@
     if (!isStart) el.title = 'Продолжение задачи, начатой ' + D.long(t.day);
 
     const hasEstimate = t.estimate !== null && t.estimate !== undefined;
-    const hours = spanned ? fmtHours(taskPerDay(t)) : (hasEstimate ? fmtHours(t.estimate) : '');
+    const hours = spanned ? fmtHours(taskHoursOn(t, Math.max(0, part))) : (hasEstimate || t.overtime ? fmtHours(taskTotal(t)) : '');
     const meta = [];
     if (t.release) meta.push(`<span class="badge rel" title="Релиз">${escapeHtml(t.release)}</span>`);
     if (spanned) meta.push(`<span class="badge span" title="Растянута на ${days.length} раб. дн., всего ${fmtHours(taskTotal(t))}">${part + 1}/${days.length}</span>`);
-    if (t.overtime) meta.push(`<span class="badge ot" title="Овертайм">+${fmtHours(t.overtime)}</span>`);
-    if (hours) meta.push(`<span class="est" title="${spanned ? 'Часов в этот день' : 'Оценка'}">${hours}</span>`);
+    if (t.overtime) meta.push(`<span class="badge ot" title="Сверх оценки ${fmtHours(t.estimate || 0)}">+${fmtHours(t.overtime)}</span>`);
+    if (hours) meta.push(`<span class="est" title="${spanned ? 'Часов в этот день' : 'Часы задачи'}">${hours}</span>`);
 
     el.innerHTML =
       `<div class="task-head"><span class="task-sq"></span><span class="task-short">${escapeHtml(shortId(t.title))}</span>` +
@@ -290,9 +297,8 @@
       el.classList.add('has-absence', (ABS[absences[0].type] || ABS.DOWNTIME).cls);
     }
 
-    // занятость дня: часы задач + часы событий (отпуск и аренда занимают весь рабочий день)
-    let sum = tasks.reduce((s, t) => s + taskPerDay(t), 0);
-    if (!D.isWeekend(day)) sum += absences.reduce((s, a) => s + absHours(a), 0);
+    // занятость дня — только рабочее время, т.е. часы задач; простой, отпуск и аренда в неё не входят
+    let sum = tasks.reduce((s, t) => s + taskHoursOn(t, taskDays(t).indexOf(day)), 0);
     sum = Math.round(sum * 100) / 100;
 
     const sumEl = el.querySelector('.sum');
@@ -302,8 +308,8 @@
     else if (sum === NORM) cls += 'ok';
     else cls += 'over';
     sumEl.className = cls;
-    sumEl.textContent = tasks.length || absences.length ? 'Σ ' + fmtHours(sum) : '';
-    sumEl.title = 'Занятость за день: задачи и события';
+    sumEl.textContent = tasks.length ? 'Σ ' + fmtHours(sum) : '';
+    sumEl.title = 'Занятость за день: часы задач';
     el.classList.toggle('has-tasks', tasks.length > 0);
     scheduleTotals();
   }
@@ -631,7 +637,7 @@
     title: document.getElementById('taskTitle'),
     release: document.getElementById('taskRelease'),
     estimate: document.getElementById('taskEstimate'),
-    days: document.getElementById('taskDays'),
+    stretch: document.getElementById('taskStretch'),
     overtime: document.getElementById('taskOvertime'),
     spanHint: document.getElementById('spanHint'),
     absEmployee: document.getElementById('absEmployee'),
@@ -697,7 +703,7 @@
     f.title.value = t ? t.title : '';
     f.release.value = t && t.release ? t.release : '';
     f.estimate.value = t && t.estimate !== null && t.estimate !== undefined ? t.estimate : '';
-    f.days.value = t ? (t.days || 1) : 1;
+    f.stretch.checked = Boolean(t && t.days > 1);
     f.overtime.value = t && t.overtime ? t.overtime : '';
 
     // событие
@@ -715,22 +721,32 @@
   }
 
   function updateSpanHint() {
-    const total = (Number(f.estimate.value) || 0) + (Number(f.overtime.value) || 0);
-    const days = Math.max(1, Number(f.days.value) || 1);
+    const estimate = Number(f.estimate.value) || 0;
+    const overtime = Number(f.overtime.value) || 0;
+    const total = estimate + overtime;
+    const parts = [];
+    if (overtime > 0) parts.push(`оценка ${fmtHours(estimate)} + ${fmtHours(overtime)} сверх = ${fmtHours(total)}`);
     f.spanHint.classList.remove('warn');
-    if (days > 1 && total <= NORM) {
-      f.spanHint.textContent = 'Растянуть можно задачу, у которой оценка с овертаймом больше 8 часов.';
-      f.spanHint.classList.add('warn');
-    } else if (days > 1) {
-      f.spanHint.textContent = `${fmtHours(total)} на ${days} раб. дн. — по ${fmtHours(total / days)} в день` +
-        (Number(f.overtime.value) ? `, из них овертайм ${fmtHours(f.overtime.value)}` : '');
-    } else if (total > NORM) {
-      f.spanHint.textContent = `${fmtHours(total)} больше дневной нормы — можно растянуть на ${Math.ceil(total / NORM)} раб. дн.`;
+    if (total <= NORM) {
+      f.stretch.disabled = true;
+      f.stretch.checked = false;
+      parts.push(total > 0 ? 'помещается в один день' : 'растянуть можно задачу больше 8 часов');
     } else {
-      f.spanHint.textContent = 'Овертайм — часы сверх нормы, они попадут в аналитику отдельно.';
+      f.stretch.disabled = false;
+      const days = spanDays(total);
+      const split = [];
+      for (let i = 0; i < days; i++) split.push(fmtHours(i === days - 1 ? total - NORM * i : NORM));
+      if (f.stretch.checked) {
+        parts.push(`${days} раб. дн.: ${split.join(' + ')}`);
+      } else {
+        parts.push(`${fmtHours(total)} в одном дне — перегруз; включите пролонгацию: ${days} раб. дн. (${split.join(' + ')})`);
+        f.spanHint.classList.add('warn');
+      }
     }
+    f.spanHint.textContent = parts.join(' · ');
   }
-  [f.estimate, f.days, f.overtime].forEach((el) => el.addEventListener('input', updateSpanHint));
+  [f.estimate, f.overtime].forEach((el) => el.addEventListener('input', updateSpanHint));
+  f.stretch.addEventListener('change', updateSpanHint);
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -749,9 +765,9 @@
       title,
       release: f.release.value.trim(),
       estimate: f.estimate.value === '' ? null : Number(f.estimate.value),
-      days: Math.max(1, Number(f.days.value) || 1),
       overtime: f.overtime.value === '' ? null : Number(f.overtime.value)
     };
+    body.days = f.stretch.checked ? spanDays((body.estimate || 0) + (body.overtime || 0)) : 1;
     let saved;
     if (ctx.task) {
       saved = await api('PUT', `/api/tasks/${ctx.task.id}`, body);

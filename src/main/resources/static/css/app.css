@@ -1246,6 +1246,19 @@ dialog.modal[open] { animation: pop 0.18s ease-out; }
 /* Диалог задачи / события */
 
 .fields-block { display: flex; flex-direction: column; gap: 14px; }
+
+.check-field .check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 0;
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.check-field input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--magenta); box-shadow: none; }
+.check-field input[type="checkbox"]:disabled + * , .check-field input[type="checkbox"]:disabled { opacity: 0.5; cursor: default; }
 .kind-switch { align-self: flex-start; }
 .span-hint.warn { color: var(--yellow); }
 

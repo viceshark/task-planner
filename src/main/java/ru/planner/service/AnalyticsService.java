@@ -46,6 +46,7 @@ public class AnalyticsService {
         final Set<LocalDate> vacation = new HashSet<>();
         final Set<LocalDate> rental = new HashSet<>();
         double overtime;
+        int overtimeTasks;
         int tasks;
     }
 
@@ -79,27 +80,33 @@ public class AnalyticsService {
         double[] byWeekday = new double[7];
         double totalHours = 0;
 
-        // Задачи: часы распределяем равномерно по дням растяжки, в период попадают только дни внутри [from, to]
+        // Задачи: по 8ч в день, остаток на последний день; в период попадают только дни внутри [from, to]
         for (Task t : taskList) {
             Acc acc = byEmployee.get(t.getEmployeeId());
-            double perDay = WorkDays.hoursPerDay(t);
-            double overtimePerDay = WorkDays.overtimePerDay(t);
+            List<LocalDate> taskDays = WorkDays.taskDays(t);
             boolean counted = false;
-            for (LocalDate d : WorkDays.taskDays(t)) {
+            double overtimeInRange = 0;
+            for (int i = 0; i < taskDays.size(); i++) {
+                LocalDate d = taskDays.get(i);
                 if (d.isBefore(from) || d.isAfter(to)) {
                     continue;
                 }
                 counted = true;
-                totalHours += perDay;
-                byWeekday[d.getDayOfWeek().getValue() - 1] += perDay;
+                double h = WorkDays.hoursOn(t, i);
+                totalHours += h;
+                byWeekday[d.getDayOfWeek().getValue() - 1] += h;
+                overtimeInRange += WorkDays.overtimeOn(t, i);
                 if (acc != null) {
-                    acc.hours.merge(d, perDay, Double::sum);
-                    acc.overtime += overtimePerDay;
+                    acc.hours.merge(d, h, Double::sum);
                 }
             }
             if (counted) {
                 if (acc != null) {
                     acc.tasks++;
+                    acc.overtime += overtimeInRange;
+                    if (overtimeInRange > 0) {
+                        acc.overtimeTasks++;
+                    }
                 }
                 String release = t.getRelease() == null || t.getRelease().isBlank() ? NO_RELEASE : t.getRelease();
                 double[] r = byRelease.computeIfAbsent(release, k -> new double[2]);
@@ -136,6 +143,7 @@ public class AnalyticsService {
         double totalOvertime = 0;
         double totalDowntime = 0;
         int overtimeEmployees = 0;
+        int overtimeTasks = 0;
         int downtimeDays = 0;
         int vacationDays = 0;
         int rentalDays = 0;
@@ -160,10 +168,11 @@ public class AnalyticsService {
                 downtime += dt;
                 maxDay = Math.max(maxDay, h);
                 dailyDowntime[i] += dt;
+                // простой — не рабочее время: ёмкость не уменьшает, а день без задач считается пустым
                 if (WorkDays.isWorkday(d) && !away) {
                     capacity += DAY_NORM;
                     dailyCapacity[i] += DAY_NORM;
-                    if (h == 0 && dt == 0) {
+                    if (h == 0) {
                         idle++;
                     }
                 }
@@ -174,7 +183,7 @@ public class AnalyticsService {
             double utilization = capacity == 0 ? 0 : hours / capacity * 100;
             employeeStats.add(new AnalyticsDto.EmployeeStat(e.getId(), e.getName(), e.getColor(), round(hours),
                 acc.tasks, capacity, round(utilization), overloaded, idle, round(maxDay),
-                round(acc.overtime), round(downtime), acc.vacation.size(), acc.rental.size()));
+                round(acc.overtime), acc.overtimeTasks, round(downtime), acc.vacation.size(), acc.rental.size()));
             series.add(new AnalyticsDto.Series(e.getId(), e.getName(), e.getColor(), data));
 
             totalCapacity += capacity;
@@ -183,6 +192,7 @@ public class AnalyticsService {
             if (acc.overtime > 0) {
                 overtimeEmployees++;
             }
+            overtimeTasks += acc.overtimeTasks;
             downtimeDays += acc.downtime.size();
             vacationDays += acc.vacation.size();
             rentalDays += acc.rental.size();
@@ -210,7 +220,8 @@ public class AnalyticsService {
         AnalyticsDto.Totals totals = new AnalyticsDto.Totals(
             totalTasks, round(totalHours), employeeList.size(), releaseCount, totalCapacity,
             round(totalCapacity == 0 ? 0 : totalHours / totalCapacity * 100),
-            round(totalOvertime), overtimeEmployees, round(totalDowntime), downtimeDays, vacationDays, rentalDays);
+            round(totalOvertime), overtimeTasks, overtimeEmployees, round(totalDowntime), downtimeDays, vacationDays,
+            rentalDays);
 
         return new AnalyticsDto(from, to, workdays, totals, employeeStats,
             days.stream().map(LocalDate::toString).toList(), series,

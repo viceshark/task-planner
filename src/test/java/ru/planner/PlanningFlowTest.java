@@ -37,10 +37,10 @@ class PlanningFlowTest {
     void spannedTaskWithOvertimeIsSpreadAcrossWorkdays() throws Exception {
         long emp = createEmployee("Олег");
 
-        // 20ч + 4ч овертайма на 3 рабочих дня начиная с четверга: Чт 17, Пт 18, Пн 21
+        // оценка 20ч + 4ч сверх оценки, растянуть: 24ч → 3 рабочих дня по 8ч начиная с четверга: Чт 17, Пт 18, Пн 21
         JsonNode task = postJson("/api/tasks", "{\"employeeId\":" + emp + ",\"day\":\"2026-09-17\",\"title\":\"BIG-1\","
-            + "\"release\":\"3.0\",\"estimate\":20,\"days\":3,\"overtime\":4}", 201);
-        assertThat(task.get("days").asInt()).isEqualTo(3);
+            + "\"release\":\"3.0\",\"estimate\":20,\"days\":2,\"overtime\":4}", 201);
+        assertThat(task.get("days").asInt()).isEqualTo(3);   // сервер считает дни по норме, а не по запросу
         assertThat(task.get("overtime").asDouble()).isEqualTo(4.0);
 
         // задача видна в периоде, куда попадает только её последний день
@@ -56,8 +56,12 @@ class PlanningFlowTest {
         assertThat(stat.get("hours").asDouble()).isEqualTo(24.0);
         assertThat(stat.get("overtime").asDouble()).isEqualTo(4.0);
         assertThat(stat.get("maxDayHours").asDouble()).isEqualTo(8.0);
+        assertThat(stat.get("overtimeTasks").asInt()).isEqualTo(1);
         assertThat(a.get("totals").get("overtime").asDouble()).isEqualTo(4.0);
+        assertThat(a.get("totals").get("overtimeTasks").asInt()).isEqualTo(1);
         assertThat(a.get("totals").get("overtimeEmployees").asInt()).isEqualTo(1);
+        // перерасход ложится на последний день: если взять период только до пятницы, сверх оценки ещё нет
+        assertThat(employee(analytics("2026-09-14", "2026-09-18"), emp).get("overtime").asDouble()).isEqualTo(0.0);
 
         // готовность релиза 3.0 — следующий рабочий день после последнего дня задачи (Пн 21 → Вт 22)
         JsonNode release = a.get("releases").get(0);
@@ -71,11 +75,14 @@ class PlanningFlowTest {
         assertThat(friday.get("release").asText()).isEqualTo("3.1");
         assertThat(friday.get("readyDay").asText()).isEqualTo("2026-09-28");
 
-        // растянуть можно только задачу больше 8 часов
-        mvc.perform(post("/api/tasks").with(csrf()).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"employeeId\":" + emp + ",\"day\":\"2026-09-17\",\"title\":\"small\",\"estimate\":4,\"days\":2}"))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.message").exists());
+        // задача не больше 8 часов всегда в один день, даже если просили растянуть; 12ч → 2 дня (8 + 4)
+        assertThat(postJson("/api/tasks", "{\"employeeId\":" + emp + ",\"day\":\"2026-09-17\",\"title\":\"small\",\"estimate\":4,\"days\":2}", 201)
+            .get("days").asInt()).isEqualTo(1);
+        assertThat(postJson("/api/tasks", "{\"employeeId\":" + emp + ",\"day\":\"2026-09-28\",\"title\":\"twelve\",\"estimate\":12,\"days\":2}", 201)
+            .get("days").asInt()).isEqualTo(2);
+        JsonNode twelve = employee(analytics("2026-09-28", "2026-09-29"), emp);
+        assertThat(twelve.get("hours").asDouble()).isEqualTo(12.0);
+        assertThat(twelve.get("maxDayHours").asDouble()).isEqualTo(8.0);
     }
 
     @Test
@@ -100,7 +107,8 @@ class PlanningFlowTest {
         assertThat(stat.get("downtimeHours").asDouble()).isEqualTo(4.0);
         assertThat(stat.get("capacity").asDouble()).isEqualTo(40.0);   // 10 рабочих дней минус 5 отсутствий
         assertThat(stat.get("hours").asDouble()).isEqualTo(4.0);
-        assertThat(stat.get("utilization").asDouble()).isEqualTo(10.0);
+        assertThat(stat.get("utilization").asDouble()).isEqualTo(10.0);   // простой в рабочее время не входит
+        assertThat(stat.get("idleWorkdays").asInt()).isEqualTo(4);        // 22–25.09 без задач; 21.09 есть задача
         assertThat(a.get("totals").get("vacationDays").asInt()).isEqualTo(3);
         assertThat(a.get("totals").get("rentalDays").asInt()).isEqualTo(2);
         assertThat(a.get("totals").get("downtimeHours").asDouble()).isEqualTo(4.0);

@@ -190,6 +190,7 @@
     renderEmployees(data);
     renderUtil(data);
     renderOvertime(data);
+    renderDowntime(data);
     renderAbsences(data);
     renderReleases(data);
     renderWeekdays(data);
@@ -220,9 +221,12 @@
     ot.textContent = fmtHours(t.overtime);
     ot.className = 'kpi-value' + (t.overtime > 0 ? ' over' : '');
     document.getElementById('kpiOvertimeSub').textContent = t.overtime > 0
-      ? `у ${t.overtimeEmployees} ${plural(t.overtimeEmployees, 'сотрудника', 'сотрудников', 'сотрудников')}` : 'сверх нормы не запланировано';
-    document.getElementById('kpiDowntime').textContent = fmtHours(t.downtimeHours);
-    document.getElementById('kpiDowntimeSub').textContent = t.downtimeDays ? `${daysWord(t.downtimeDays)} с простоем` : 'простоев нет';
+      ? `${t.overtimeTasks} ${plural(t.overtimeTasks, 'задача не уложилась', 'задачи не уложились', 'задач не уложились')} в оценку · у ${t.overtimeEmployees} ${plural(t.overtimeEmployees, 'сотрудника', 'сотрудников', 'сотрудников')}`
+      : 'все задачи в рамках оценки';
+    const dt = document.getElementById('kpiDowntime');
+    dt.textContent = fmtHours(t.downtimeHours);
+    dt.className = 'kpi-value' + (t.downtimeHours > 0 ? ' over' : '');
+    document.getElementById('kpiDowntimeSub').textContent = t.downtimeDays ? `${daysWord(t.downtimeDays)} с простоем · не рабочее время` : 'простоев нет';
     document.getElementById('kpiAway').textContent = daysWord(t.vacationDays + t.rentalDays);
     document.getElementById('kpiAwaySub').textContent = `отпуск ${daysWord(t.vacationDays)} · аренда ${daysWord(t.rentalDays)}`;
   }
@@ -242,16 +246,6 @@
         borderRadius: is90s() ? 0 : 3,
         stack: 'hours'
       };
-    });
-    datasets.push({
-      label: 'Простой',
-      data: data.dailyDowntime,
-      backgroundColor: p.downtime,
-      borderColor: p.downtimeBorder,
-      borderWidth: 1,
-      borderDash: [3, 2],
-      borderRadius: 0,
-      stack: 'hours'
     });
     datasets.push({
       type: 'line',
@@ -376,7 +370,7 @@
       data: {
         labels: data.employees.map((e) => e.name),
         datasets: [{
-          label: 'Овертайм, ч',
+          label: 'Сверх оценки, ч',
           data: data.employees.map((e) => e.overtime),
           backgroundColor: solid(p.overtime, 0.5),
           borderColor: stroke(p.overtime),
@@ -385,10 +379,34 @@
         }]
       },
       options: barOpts({
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (i) => ` ${fmtHours(i.raw)} · задач сверх оценки: ${data.employees[i.dataIndex].overtimeTasks}` } } }
+      })
+    });
+    if (!data.employees.some((e) => e.overtime > 0)) emptyNote('chartOvertime', 'Все задачи в рамках оценки');
+  }
+
+  function renderDowntime(data) {
+    destroy('downtime');
+    const p = palette();
+    charts.downtime = new Chart(document.getElementById('chartDowntime'), {
+      type: 'bar',
+      data: {
+        labels: data.employees.map((e) => e.name),
+        datasets: [{
+          label: 'Простой, ч',
+          data: data.employees.map((e) => e.downtimeHours),
+          backgroundColor: p.downtime,
+          borderColor: p.downtimeBorder,
+          borderWidth: 1.5,
+          borderDash: [3, 2],
+          borderRadius: p.borderRadius
+        }]
+      },
+      options: barOpts({
         plugins: { legend: { display: false }, tooltip: { callbacks: { label: (i) => ` ${fmtHours(i.raw)}` } } }
       })
     });
-    if (!data.employees.some((e) => e.overtime > 0)) emptyNote('chartOvertime', 'Овертаймов за период нет');
+    if (!data.employees.some((e) => e.downtimeHours > 0)) emptyNote('chartDowntime', 'Простоев за период нет');
   }
 
   function renderAbsences(data) {
@@ -396,7 +414,7 @@
     const p = palette();
     const mk = (label, key, color, border) => ({
       label,
-      data: data.employees.map((e) => (key === 'downtimeHours' ? e[key] : e[key] * 8)),
+      data: data.employees.map((e) => e[key]),
       backgroundColor: color,
       borderColor: border,
       borderWidth: 1,
@@ -408,18 +426,17 @@
       data: {
         labels: data.employees.map((e) => e.name),
         datasets: [
-          mk('Простой', 'downtimeHours', p.downtime, p.downtimeBorder),
           mk('Отпуск', 'vacationDays', solid(p.vacation, 0.5), stroke(p.vacation)),
           mk('Аренда', 'rentalDays', solid(p.rental, 0.5), stroke(p.rental))
         ]
       },
       options: barOpts({
-        scales: { x: axis({ stacked: true, grid: { display: false } }), y: axis({ stacked: true, beginAtZero: true }) },
-        plugins: { tooltip: { filter: (i) => i.raw !== 0, callbacks: { label: (i) => ` ${i.dataset.label}: ${fmtHours(i.raw)}` } } }
+        scales: { x: axis({ stacked: true, grid: { display: false } }), y: axis({ stacked: true, beginAtZero: true, ticks: { color: p.text, precision: 0 } }) },
+        plugins: { tooltip: { filter: (i) => i.raw !== 0, callbacks: { label: (i) => ` ${i.dataset.label}: ${daysWord(i.raw)}` } } }
       })
     });
-    if (!data.employees.some((e) => e.downtimeHours > 0 || e.vacationDays > 0 || e.rentalDays > 0)) {
-      emptyNote('chartAbsences', 'Событий за период нет');
+    if (!data.employees.some((e) => e.vacationDays > 0 || e.rentalDays > 0)) {
+      emptyNote('chartAbsences', 'Отпусков и аренды за период нет');
     }
   }
 
@@ -505,8 +522,8 @@
         <td class="num">${fmtHours(e.capacity)}</td>
         <td class="num"><span class="pill ${utilClass(e.utilization)}">${e.utilization}%</span></td>
         <td class="num">${e.tasks}</td>
-        <td class="num">${e.overtime ? `<span class="pill over">${fmtHours(e.overtime)}</span>` : '—'}</td>
-        <td class="num">${e.downtimeHours ? fmtHours(e.downtimeHours) : '—'}</td>
+        <td class="num">${e.overtime ? `<span class="pill over" title="задач сверх оценки: ${e.overtimeTasks}">${fmtHours(e.overtime)}</span>` : '—'}</td>
+        <td class="num">${e.downtimeHours ? `<span class="pill over">${fmtHours(e.downtimeHours)}</span>` : '—'}</td>
         <td class="num">${e.vacationDays ? daysWord(e.vacationDays) : '—'}</td>
         <td class="num">${e.rentalDays ? daysWord(e.rentalDays) : '—'}</td>
         <td class="num">${e.overloadedDays}</td>

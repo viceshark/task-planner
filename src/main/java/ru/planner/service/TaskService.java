@@ -67,7 +67,7 @@ public class TaskService {
         return TaskDto.from(tasks.save(t));
     }
 
-    /** Перенос в другую ячейку: релиз, оценка, растяжка и овертайм остаются у задачи, меняются сотрудник и день начала. */
+    /** Перенос в другую ячейку: релиз, оценка, растяжка и часы сверх оценки остаются у задачи, меняются сотрудник и день начала. */
     @Transactional
     public TaskDto move(Long id, TaskMoveRequest request) {
         Task t = get(id);
@@ -86,13 +86,15 @@ public class TaskService {
         tasks.delete(get(id));
     }
 
-    /** Пролонгация разрешена только задачам, у которых часов больше дневной нормы. */
+    /**
+     * Пролонгация: если задачу просят растянуть (days > 1), число дней считается по норме —
+     * 8ч в день, остаток на последний день (12ч → 2 дня). Задача не больше 8ч всегда в один день.
+     */
     private static int span(Integer days, Double estimate, Double overtime) {
-        int d = days == null ? 1 : days;
-        if (d > 1 && WorkDays.nz(estimate) + WorkDays.nz(overtime) <= WorkDays.DAY_NORM) {
-            throw new IllegalArgumentException("Растянуть на несколько дней можно задачу с оценкой больше 8 часов");
+        if (days == null || days <= 1) {
+            return 1;
         }
-        return d;
+        return WorkDays.spanDays(WorkDays.nz(estimate) + WorkDays.nz(overtime));
     }
 
     private Task get(Long id) {

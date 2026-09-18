@@ -31,17 +31,48 @@ class WorkDaysTest {
     }
 
     @Test
-    void hoursAreSplitEvenlyAcrossDaysIncludingOvertime() {
+    void hoursFillEightPerDayWithRemainderOnLastDay() {
         Task t = new Task();
         t.setDay(LocalDate.of(2026, 9, 14));
-        t.setEstimate(20.0);
-        t.setOvertime(4.0);
-        t.setDays(3);
-        assertThat(WorkDays.totalHours(t)).isEqualTo(24.0);
-        assertThat(WorkDays.hoursPerDay(t)).isEqualTo(8.0);
-        assertThat(WorkDays.overtimePerDay(t)).isCloseTo(1.333, org.assertj.core.data.Offset.offset(0.001));
-        assertThat(WorkDays.lastDay(t)).isEqualTo(LocalDate.of(2026, 9, 16));
-        List<LocalDate> days = WorkDays.taskDays(t);
-        assertThat(days).hasSize(3);
+        t.setEstimate(12.0);
+        t.setDays(WorkDays.spanDays(12));
+        assertThat(t.getDays()).isEqualTo(2);
+        assertThat(WorkDays.hoursOn(t, 0)).isEqualTo(8.0);
+        assertThat(WorkDays.hoursOn(t, 1)).isEqualTo(4.0);
+        assertThat(WorkDays.hoursOn(t, 2)).isEqualTo(0.0);
+        assertThat(WorkDays.lastDay(t)).isEqualTo(LocalDate.of(2026, 9, 15));
+    }
+
+    @Test
+    void spanDaysByNorm() {
+        assertThat(WorkDays.spanDays(8)).isEqualTo(1);
+        assertThat(WorkDays.spanDays(8.5)).isEqualTo(2);
+        assertThat(WorkDays.spanDays(16)).isEqualTo(2);
+        assertThat(WorkDays.spanDays(24)).isEqualTo(3);
+        assertThat(WorkDays.spanDays(1000)).isEqualTo(WorkDays.MAX_SPAN);
+    }
+
+    @Test
+    void overtimeIsWhatExceedsEstimateAndLandsOnLastDays() {
+        // оценка 10ч, реально ушло 20ч (10 сверх): дни 8 / 8 / 4 — оценка кончается на втором дне
+        Task t = new Task();
+        t.setDay(LocalDate.of(2026, 9, 14));
+        t.setEstimate(10.0);
+        t.setOvertime(10.0);
+        t.setDays(WorkDays.spanDays(20));
+        assertThat(t.getDays()).isEqualTo(3);
+        assertThat(WorkDays.overtimeOn(t, 0)).isEqualTo(0.0);
+        assertThat(WorkDays.overtimeOn(t, 1)).isEqualTo(6.0);
+        assertThat(WorkDays.overtimeOn(t, 2)).isEqualTo(4.0);
+        assertThat(WorkDays.totalHours(t)).isEqualTo(20.0);
+
+        // без растяжки всё в одном дне: 12ч, из них 4 сверх оценки
+        Task single = new Task();
+        single.setDay(LocalDate.of(2026, 9, 14));
+        single.setEstimate(8.0);
+        single.setOvertime(4.0);
+        single.setDays(1);
+        assertThat(WorkDays.hoursOn(single, 0)).isEqualTo(12.0);
+        assertThat(WorkDays.overtimeOn(single, 0)).isEqualTo(4.0);
     }
 }
